@@ -10,6 +10,7 @@ const configuredOrigins = [
   ...parseOrigins(process.env.FRONTEND_URL),
   ...parseOrigins(process.env.FRONTEND_URLS),
   ...parseOrigins(process.env.NEXT_PUBLIC_FRONTEND_URL),
+  'https://pro-heath.vercel.app',
   'https://pro-health-track.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
