@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PRO HealthTrack
 
-## Getting Started
+HealthTrack is a Next.js app with PostgreSQL-backed API routes for user login, submissions, document metadata, and admin analytics.
 
-First, run the development server:
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create `.env.local` in this project root:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+FRONTEND_URL=http://localhost:3000
+NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
+NEXT_PUBLIC_API_BASE_URL=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Apply the database schema from `database/schema.sql` to your Neon/PostgreSQL database.
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+Recommended deployment split:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Database: Neon PostgreSQL
+- Backend/API: Render
+- Frontend: Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Neon
 
-## Deploy on Vercel
+1. Create a Neon PostgreSQL database.
+2. Run `database/schema.sql`.
+3. Copy the pooled connection string for `DATABASE_URL`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Render Backend
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Create a Render Web Service from this repo.
+
+Use:
+
+```bash
+npm install
+npm run build
+npm run start
+```
+
+Set environment variables:
+
+```env
+DATABASE_URL=your_neon_connection_string
+FRONTEND_URL=https://your-vercel-app.vercel.app
+NEXT_PUBLIC_FRONTEND_URL=https://your-vercel-app.vercel.app
+```
+
+### Vercel Frontend
+
+Import the same repo in Vercel.
+
+Set environment variables:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://your-render-backend.onrender.com
+NEXT_PUBLIC_FRONTEND_URL=https://your-vercel-app.vercel.app
+```
+
+The frontend uses `NEXT_PUBLIC_API_BASE_URL` to call the Render API with credentials.
+
+## Verification
+
+```bash
+npm run lint
+npm run build
+```
