@@ -35,10 +35,14 @@ export const sendStatusUpdateEmail = async (
   proName: string | null,
   patientName: string,
   newStatus: string,
-  submissionId: string
+  submissionId: string,
+  reason: string | null = null
 ) => {
   const statusInfo = statusColors[newStatus] || statusColors.Pending;
   const greeting = proName ? `Hi ${proName}` : 'Hi';
+  const safeReason = reason
+    ? reason.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]!)
+    : null;
 
   const html = `
     <!DOCTYPE html>
@@ -88,6 +92,8 @@ export const sendStatusUpdateEmail = async (
               </tr>
             </table>
           </div>
+
+          ${safeReason ? `<div style="margin:-8px 0 24px;padding:16px;border-left:4px solid ${statusInfo.text};background:${statusInfo.bg};border-radius:6px;"><strong style="display:block;margin-bottom:5px;color:${statusInfo.text};font-size:13px;">${newStatus === 'Rejected' ? 'Reason for rejection' : 'Review note'}</strong><span style="color:#374151;font-size:13px;line-height:1.5;">${safeReason}</span></div>` : ''}
           
           <p style="margin:0;color:#6B7280;font-size:13px;line-height:1.5;">
             Log in to your PRO HealthTrack dashboard to view full details of your leads.

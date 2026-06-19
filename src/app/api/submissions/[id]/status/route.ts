@@ -19,15 +19,37 @@ export async function PATCH(
     const { id } = await context.params;
     const body = await request.json();
     const status = body.status as SubmissionStatus;
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
 
     if (!allowedStatuses.includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const result = await updateSubmissionStatus(id, status);
+    if (status === 'Rejected' && reason.length < 5) {
+      return NextResponse.json(
+        { error: 'Please provide a clear rejection reason of at least 5 characters.' },
+        { status: 400 }
+      );
+    }
+
+    if (status === 'Pending' && reason.length < 5) {
+      return NextResponse.json(
+        { error: 'Please provide a reason for reopening this lead.' },
+        { status: 400 }
+      );
+    }
+
+    const result = await updateSubmissionStatus(id, status, admin.id, reason || null);
 
     if (!result) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    }
+
+    if ('conflict' in result) {
+      return NextResponse.json(
+        { error: `This lead is already ${result.currentStatus}. Reopen it before making another decision.` },
+        { status: 409 }
+      );
     }
 
     // Fire-and-forget email notification
@@ -37,7 +59,8 @@ export async function PATCH(
         result.proName,
         result.submission.fullName,
         status,
-        id
+        id,
+        reason || null
       );
     }
 

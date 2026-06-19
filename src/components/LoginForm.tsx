@@ -54,12 +54,30 @@ export const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center px-4">
-      <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
+    <div className="app-surface flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/75 shadow-[0_30px_80px_rgba(30,64,175,.16)] backdrop-blur-xl lg:grid-cols-[1.1fr_.9fr]">
+        <section className="relative hidden overflow-hidden bg-gradient-to-br from-[#173b76] via-blue-600 to-teal-500 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+          <div className="relative z-10">
+            <div className="mb-12 flex items-center gap-3">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15 text-2xl font-black ring-1 ring-white/25">+</span>
+              <div><strong className="block text-lg">PRO HealthTrack</strong><span className="text-sm text-blue-100">Care operations platform</span></div>
+            </div>
+            <h2 className="max-w-md text-4xl font-extrabold leading-tight tracking-tight">Healthcare leads, beautifully organized.</h2>
+            <p className="mt-5 max-w-md leading-7 text-blue-100">A secure workspace for patient referrals, document management and real-time lead tracking.</p>
+          </div>
+          <div className="relative z-10 grid grid-cols-3 gap-3">
+            {['Secure access', 'Live tracking', 'Simple workflow'].map((item) => <div key={item} className="rounded-xl border border-white/15 bg-white/10 p-3 text-center text-xs font-semibold backdrop-blur">{item}</div>)}
+          </div>
+          <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full border border-white/15" />
+          <div className="absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
+        </section>
+        <div className="w-full p-7 sm:p-10 lg:p-12">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-600 mb-2">PRO HealthTrack</h1>
-          <p className="text-gray-600 text-sm">Healthcare Lead Management System</p>
+          <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-teal-500 text-2xl font-black text-white shadow-lg shadow-blue-200 lg:hidden">+</div>
+          <p className="mb-2 text-xs font-extrabold uppercase tracking-[.18em] text-blue-600">Welcome back</p>
+          <h1 className="mb-2 text-3xl font-extrabold tracking-tight text-slate-950">Sign in to your account</h1>
+          <p className="text-sm text-slate-500">Use your admin or PRO credentials to continue</p>
         </div>
 
         {/* Form */}
@@ -137,12 +155,13 @@ export const LoginForm = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition duration-200 disabled:bg-gray-400"
+            className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 py-3 font-bold text-white shadow-lg shadow-blue-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:bg-gray-400"
           >
             {isSubmitting ? 'Please wait...' : 'Login'}
           </button>
         </form>
 
+        </div>
       </div>
     </div>
   );

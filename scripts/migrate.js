@@ -46,6 +46,10 @@ const pool = new Pool({
     console.log('Adding new role check constraint...');
     await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro'))");
 
+    console.log('Applying the current application schema...');
+    const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf8');
+    await pool.query(schemaSql);
+
     console.log('Database migration successfully completed!');
     await pool.end();
     process.exit(0);

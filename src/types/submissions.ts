@@ -1,5 +1,13 @@
 export type SubmissionStatus = 'Pending' | 'Approved' | 'Rejected';
 
+export interface SubmissionStatusEvent {
+  id: string;
+  fromStatus: SubmissionStatus;
+  toStatus: SubmissionStatus;
+  reason: string | null;
+  createdAt: string;
+}
+
 export interface UploadedDocument {
   id?: string;
   name: string;
@@ -20,6 +28,10 @@ export interface UserSubmission {
   contactNumber: string | null;
   reference: string;
   status: SubmissionStatus;
+  rejectionReason: string | null;
+  adminSeenAt: string | null;
+  statusUpdatedAt: string | null;
+  statusHistory: SubmissionStatusEvent[];
   documents: UploadedDocument[];
   submittedAt: string;
 }

@@ -107,11 +107,33 @@ ALTER TABLE form_submissions
     ADD COLUMN IF NOT EXISTS user_id UUID
         REFERENCES app_users(id) ON DELETE SET NULL;
 
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS admin_seen_at TIMESTAMPTZ;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMPTZ;
+
 ALTER TABLE form_submissions
     ALTER COLUMN contact_number DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_form_submissions_user_id
     ON form_submissions (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_form_submissions_admin_seen_at
+    ON form_submissions (admin_seen_at, submitted_at DESC);
+
+CREATE TABLE IF NOT EXISTS submission_status_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    submission_id UUID NOT NULL
+        REFERENCES form_submissions(id) ON DELETE CASCADE,
+    changed_by UUID
+        REFERENCES app_users(id) ON DELETE SET NULL,
+    from_status VARCHAR(20) NOT NULL,
+    to_status VARCHAR(20) NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_submission_status_history_submission
+    ON submission_status_history (submission_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

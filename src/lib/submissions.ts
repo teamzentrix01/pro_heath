@@ -18,6 +18,16 @@ type SubmissionRow = {
   contact_number: string | null;
   reference: string;
   status: SubmissionStatus;
+  rejection_reason: string | null;
+  admin_seen_at: Date | null;
+  status_updated_at: Date | null;
+  status_history: Array<{
+    id: string;
+    fromStatus: SubmissionStatus;
+    toStatus: SubmissionStatus;
+    reason: string | null;
+    createdAt: string;
+  }> | null;
   submitted_at: Date;
   documents: UploadedDocument[] | null;
 };
@@ -33,6 +43,10 @@ const mapSubmission = (row: SubmissionRow): UserSubmission => ({
   contactNumber: row.contact_number,
   reference: row.reference,
   status: row.status,
+  rejectionReason: row.rejection_reason,
+  adminSeenAt: row.admin_seen_at?.toISOString() ?? null,
+  statusUpdatedAt: row.status_updated_at?.toISOString() ?? null,
+  statusHistory: row.status_history ?? [],
   documents: row.documents ?? [],
   submittedAt: row.submitted_at.toISOString(),
 });
@@ -65,6 +79,10 @@ export const createSubmission = async (submission: {
          contact_number,
          reference,
          status,
+         NULL::text AS rejection_reason,
+         NULL::timestamptz AS admin_seen_at,
+         NULL::timestamptz AS status_updated_at,
+         '[]'::jsonb AS status_history,
          submitted_at,
          '[]'::jsonb AS documents`,
       [
@@ -118,6 +136,19 @@ export const getSubmissionById = async (id: string) => {
        fs.contact_number,
        fs.reference,
        fs.status,
+       fs.rejection_reason,
+       fs.admin_seen_at,
+       fs.status_updated_at,
+       COALESCE((
+         SELECT jsonb_agg(jsonb_build_object(
+           'id', sh.id,
+           'fromStatus', sh.from_status,
+           'toStatus', sh.to_status,
+           'reason', sh.reason,
+           'createdAt', sh.created_at
+         ) ORDER BY sh.created_at DESC)
+         FROM submission_status_history sh WHERE sh.submission_id = fs.id
+       ), '[]'::jsonb) AS status_history,
        fs.submitted_at,
        COALESCE(
          jsonb_agg(
@@ -194,6 +225,19 @@ export const listSubmissions = async (filters: {
        fs.contact_number,
        fs.reference,
        fs.status,
+       fs.rejection_reason,
+       fs.admin_seen_at,
+       fs.status_updated_at,
+       COALESCE((
+         SELECT jsonb_agg(jsonb_build_object(
+           'id', sh.id,
+           'fromStatus', sh.from_status,
+           'toStatus', sh.to_status,
+           'reason', sh.reason,
+           'createdAt', sh.created_at
+         ) ORDER BY sh.created_at DESC)
+         FROM submission_status_history sh WHERE sh.submission_id = fs.id
+       ), '[]'::jsonb) AS status_history,
        fs.submitted_at,
        COALESCE(
          jsonb_agg(
@@ -221,14 +265,63 @@ export const listSubmissions = async (filters: {
   return result.rows.map(mapSubmission);
 };
 
-export const updateSubmissionStatus = async (id: string, status: SubmissionStatus) => {
-  const result = await pool.query(
-    `UPDATE form_submissions
-     SET status = $1, reviewed_at = NOW(), updated_at = NOW()
-     WHERE id = $2
-     RETURNING id, user_id`,
-    [status, id]
-  );
+export const updateSubmissionStatus = async (
+  id: string,
+  status: SubmissionStatus,
+  adminId: string,
+  reason: string | null
+) => {
+  const client = await pool.connect();
+  let result;
+
+  try {
+    await client.query('BEGIN');
+    const current = await client.query<{ status: SubmissionStatus; user_id: string | null }>(
+      `SELECT status, user_id FROM form_submissions WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!current.rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const previousStatus = current.rows[0].status;
+    const isReopen = status === 'Pending' && previousStatus !== 'Pending';
+    const isInitialDecision = previousStatus === 'Pending' && status !== 'Pending';
+    if (!isReopen && !isInitialDecision) {
+      await client.query('ROLLBACK');
+      return { conflict: true as const, currentStatus: previousStatus };
+    }
+
+    result = await client.query(
+      `WITH input AS (
+         SELECT $1::varchar(20) AS next_status, $2::text AS reason
+       )
+       UPDATE form_submissions
+       SET status = input.next_status,
+           rejection_reason = CASE WHEN input.next_status = 'Rejected' THEN input.reason ELSE NULL END,
+           reviewed_at = CASE WHEN input.next_status = 'Pending' THEN NULL ELSE NOW() END,
+           status_updated_at = NOW(),
+           admin_seen_at = COALESCE(admin_seen_at, NOW()),
+           updated_at = NOW()
+       FROM input
+       WHERE id = $3
+       RETURNING form_submissions.id, form_submissions.user_id`,
+      [status, reason, id]
+    );
+    await client.query(
+      `INSERT INTO submission_status_history
+         (submission_id, changed_by, from_status, to_status, reason)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, adminId, previousStatus, status, reason]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 
   if (result.rowCount === 0) return null;
 
@@ -251,6 +344,19 @@ export const updateSubmissionStatus = async (id: string, status: SubmissionStatu
   return { submission, proEmail, proName };
 };
 
+export const markSubmissionSeen = async (id: string) => {
+  const result = await pool.query(
+    `UPDATE form_submissions SET admin_seen_at = COALESCE(admin_seen_at, NOW())
+     WHERE id = $1 RETURNING id`,
+    [id]
+  );
+  return result.rowCount !== 0;
+};
+
+export const markAllSubmissionsSeen = async () => {
+  await pool.query(`UPDATE form_submissions SET admin_seen_at = NOW() WHERE admin_seen_at IS NULL`);
+};
+
 export const listSubmissionsByUserId = async (userId: string) => {
   const result = await pool.query<SubmissionRow>(
     `SELECT
@@ -264,6 +370,19 @@ export const listSubmissionsByUserId = async (userId: string) => {
        fs.contact_number,
        fs.reference,
        fs.status,
+       fs.rejection_reason,
+       fs.admin_seen_at,
+       fs.status_updated_at,
+       COALESCE((
+         SELECT jsonb_agg(jsonb_build_object(
+           'id', sh.id,
+           'fromStatus', sh.from_status,
+           'toStatus', sh.to_status,
+           'reason', sh.reason,
+           'createdAt', sh.created_at
+         ) ORDER BY sh.created_at DESC)
+         FROM submission_status_history sh WHERE sh.submission_id = fs.id
+       ), '[]'::jsonb) AS status_history,
        fs.submitted_at,
        COALESCE(
          jsonb_agg(

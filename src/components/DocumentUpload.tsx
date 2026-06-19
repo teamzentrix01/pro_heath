@@ -62,7 +62,13 @@ export const DocumentUpload = ({ onFilesChange, error }: DocumentUploadProps) =>
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
-        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition"
+        onClick={handleBrowseClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') handleBrowseClick();
+        }}
+        className="cursor-pointer rounded-2xl border-2 border-dashed border-blue-200 bg-gradient-to-br from-blue-50/80 to-teal-50/60 p-6 text-center transition hover:border-blue-400 hover:shadow-md sm:p-8"
       >
         <input
           ref={fileInputRef}
@@ -91,8 +97,11 @@ export const DocumentUpload = ({ onFilesChange, error }: DocumentUploadProps) =>
           <p className="text-gray-500 text-sm mb-4">or</p>
           <button
             type="button"
-            onClick={handleBrowseClick}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleBrowseClick();
+            }}
+            className="rounded-xl bg-blue-600 px-6 py-2.5 font-semibold text-white shadow-md shadow-blue-200 transition hover:bg-blue-700"
           >
             Browse Files
           </button>
@@ -108,9 +117,9 @@ export const DocumentUpload = ({ onFilesChange, error }: DocumentUploadProps) =>
             {files.map((file, index) => (
               <div
                 key={`${file.name}-${index}`}
-                className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200"
+                className="flex min-w-0 items-center justify-between rounded-xl border border-slate-200 bg-white/80 p-3 sm:p-4"
               >
-                <div className="flex items-center flex-1">
+                <div className="flex min-w-0 flex-1 items-center">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
                     <svg
                       className="w-6 h-6 text-blue-600"
@@ -126,7 +135,7 @@ export const DocumentUpload = ({ onFilesChange, error }: DocumentUploadProps) =>
                       />
                     </svg>
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
                     <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                   </div>

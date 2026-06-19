@@ -90,13 +90,26 @@ export const UserForm = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadMyLeads(true), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadMyLeads]);
+
   // Poll leads when leads panel is open
   useEffect(() => {
     if (isLeadsOpen) {
-      void loadMyLeads();
+      const timer = window.setTimeout(() => void loadMyLeads(), 0);
       leadsPollRef.current = setInterval(() => {
         void loadMyLeads(true);
       }, POLL_INTERVAL_MS);
+
+      return () => {
+        window.clearTimeout(timer);
+        if (leadsPollRef.current) {
+          clearInterval(leadsPollRef.current);
+          leadsPollRef.current = null;
+        }
+      };
     }
 
     return () => {
@@ -312,8 +325,8 @@ export const UserForm = () => {
   }, [myLeads]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+    <div className="app-surface user-dashboard text-slate-950">
+      <header className="user-topbar sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
@@ -389,7 +402,32 @@ export const UserForm = () => {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <section className="user-hero">
+          <div className="relative z-[1]">
+            <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-blue-50">
+              PRO workspace
+            </span>
+            <h2 className="mt-4">Welcome back, {user?.fullName?.split(' ')[0] || 'PRO'}</h2>
+            <p>Refer a patient securely, attach their documents, and track every lead from one simple workspace.</p>
+          </div>
+          <div className="hero-badge" aria-hidden="true">✚</div>
+        </section>
+
+        <section className="user-stat-grid" aria-label="Lead summary">
+          <div className="user-stat"><strong>{myLeads.length}</strong><span>Total leads</span></div>
+          <div className="user-stat"><strong className="!text-amber-600">{leadStatusCounts.Pending}</strong><span>Pending</span></div>
+          <div className="user-stat"><strong className="!text-emerald-600">{leadStatusCounts.Approved}</strong><span>Approved</span></div>
+          <button type="button" onClick={() => setIsLeadsOpen(true)} className="user-stat text-left transition hover:-translate-y-0.5 hover:shadow-lg">
+            <strong className="!text-blue-600">View</strong><span>My lead history →</span>
+          </button>
+        </section>
+
+        <section className="user-form-card rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="form-heading">
+            <span className="section-kicker">New referral</span>
+            <h2>Patient information</h2>
+            <p>Enter the patient details below. Fields marked with an asterisk are required.</p>
+          </div>
           {successMessage && (
             <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
               {successMessage}
@@ -745,6 +783,8 @@ export const UserForm = () => {
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[lead.status]}`}>
                               {lead.status}
                             </span>
+                            {lead.rejectionReason && <div className="mt-2 max-w-xs rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs leading-5 text-red-800"><strong className="block">Admin message</strong>{lead.rejectionReason}</div>}
+                            {lead.status === 'Pending' && lead.statusHistory.length > 0 && <div className="mt-2 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800"><strong className="block">Reopened for review</strong>{lead.statusHistory[0].reason || 'The admin has reopened this lead.'}</div>}
                           </td>
                         </tr>
                       ))}

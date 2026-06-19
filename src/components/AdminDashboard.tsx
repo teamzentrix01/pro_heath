@@ -94,7 +94,15 @@ export const AdminDashboard = () => {
   const [userCreationMessage, setUserCreationMessage] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [statusAction, setStatusAction] = useState<{
+    submission: UserSubmission;
+    status: SubmissionStatus;
+  } | null>(null);
+  const [statusReason, setStatusReason] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [newLeadNotice, setNewLeadNotice] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const knownSubmissionIdsRef = useRef<Set<string>>(new Set());
 
   const loadSubmissions = useCallback(async (silent = false) => {
     if (!silent) {
@@ -110,6 +118,12 @@ export const AdminDashboard = () => {
       }
 
       const data = await response.json();
+      const incomingSubmissions = data.submissions as UserSubmission[];
+      if (silent && knownSubmissionIdsRef.current.size > 0) {
+        const newCount = incomingSubmissions.filter((item) => !knownSubmissionIdsRef.current.has(item.id)).length;
+        if (newCount > 0) setNewLeadNotice(newCount);
+      }
+      knownSubmissionIdsRef.current = new Set(incomingSubmissions.map((item) => item.id));
       setSubmissions(data.submissions);
     } catch {
       if (!silent) {
@@ -211,8 +225,9 @@ export const AdminDashboard = () => {
     void loadUserAnalytics();
   }, [analyticsDate, analyticsPeriod]);
 
-  const updateStatus = async (submissionId: string, status: SubmissionStatus) => {
+  const updateStatus = async (submissionId: string, status: SubmissionStatus, reason = '') => {
     setDashboardError('');
+    setIsUpdatingStatus(true);
 
     try {
       const response = await apiFetch(`/api/submissions/${submissionId}/status`, {
@@ -220,11 +235,12 @@ export const AdminDashboard = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, reason }),
       });
 
       if (!response.ok) {
-        throw new Error('Unable to update status');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Unable to update status');
       }
 
       const data = await response.json();
@@ -233,9 +249,26 @@ export const AdminDashboard = () => {
           submission.id === submissionId ? data.submission : submission
         )
       );
-    } catch {
-      setDashboardError('Unable to update this lead status.');
+      setStatusAction(null);
+      setStatusReason('');
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Unable to update this lead status.');
+    } finally {
+      setIsUpdatingStatus(false);
     }
+  };
+
+  const markSeen = async (submissionId: string) => {
+    setSubmissions((current) => current.map((item) =>
+      item.id === submissionId ? { ...item, adminSeenAt: item.adminSeenAt ?? new Date().toISOString() } : item
+    ));
+    await apiFetch(`/api/submissions/${submissionId}/seen`, { method: 'PATCH' });
+  };
+
+  const markAllSeen = async () => {
+    const seenAt = new Date().toISOString();
+    setSubmissions((current) => current.map((item) => ({ ...item, adminSeenAt: item.adminSeenAt ?? seenAt })));
+    await apiFetch('/api/submissions/seen', { method: 'PATCH' });
   };
 
   const handleExportExcel = async () => {
@@ -299,6 +332,7 @@ export const AdminDashboard = () => {
   );
 
   const totalDocuments = submissions.reduce((sum, submission) => sum + submission.documents.length, 0);
+  const unreadCount = submissions.filter((submission) => !submission.adminSeenAt).length;
   const calendarTitle = calendarDate.toLocaleString(undefined, {
     month: 'long',
     year: 'numeric',
@@ -393,12 +427,32 @@ export const AdminDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+    <div className="app-surface admin-dashboard">
+      <aside className="admin-sidebar" aria-label="Admin navigation">
+        <div className="brand-mark">
+          <div className="brand-icon">+</div>
+          <div>
+            <strong>PRO HealthTrack</strong>
+            <small>Care operations</small>
+          </div>
+        </div>
+        <nav className="side-nav">
+          <a href="#overview"><span>◫</span><b>Overview</b></a>
+          <a href="#pros"><span>♙</span><b>PRO Accounts</b></a>
+          <a href="#analytics"><span>⌁</span><b>Analytics</b></a>
+          <a href="#submissions"><span>≡</span><b>Submitted Leads</b></a>
+        </nav>
+        <div className="sidebar-footer">
+          <strong className="block text-white">System status</strong>
+          All services are operational and lead data refreshes automatically.
+        </div>
+      </aside>
+
+      <header className="admin-header">
+        <div className="mx-auto flex max-w-[1600px] flex-row items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">Admin overview</h1>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-semibold text-green-700">
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 Live
@@ -406,23 +460,35 @@ export const AdminDashboard = () => {
             </div>
             <p className="text-gray-600 mt-1">PRO HealthTrack — Lead Management</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
-          > 
-            Logout
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => document.getElementById('submissions')?.scrollIntoView()}
+              className="relative grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-lg text-slate-700 shadow-sm transition hover:bg-blue-50"
+              aria-label={`${unreadCount} new leads`}
+              title={unreadCount > 0 ? `${unreadCount} new lead notifications` : 'No new lead notifications'}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+              </svg>
+              {unreadCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unreadCount}</span>}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100"
+            >Logout</button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <main className="admin-content space-y-8">
         {dashboardError && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
             {dashboardError}
           </div>
         )}
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <section id="overview" className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="bg-white rounded-lg shadow p-5">
             <p className="text-gray-600 text-sm font-medium">Total Leads</p>
             <p className="text-4xl font-bold text-blue-600 mt-2">{submissions.length}</p>
@@ -445,7 +511,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section id="pros" className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 bg-white px-6 py-4">
               <h2 className="text-xl font-bold text-gray-900">Create PRO Credentials</h2>
@@ -624,7 +690,7 @@ export const AdminDashboard = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="admin-leads-table w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
@@ -678,6 +744,8 @@ export const AdminDashboard = () => {
                 Search by date, name, contact, reference, status, document name, or any saved lead detail.
               </p>
             </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+            {unreadCount > 0 && <button type="button" onClick={() => void markAllSeen()} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Mark {unreadCount} new as read</button>}
             <button
               type="button"
               onClick={() => {
@@ -698,6 +766,7 @@ export const AdminDashboard = () => {
             >
               Refresh
             </button>
+          </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-5">
             <div>
@@ -774,7 +843,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow p-6">
+        <section id="analytics" className="bg-white rounded-lg shadow p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Reference Analytics</h2>
@@ -876,7 +945,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow overflow-hidden">
+        <section id="submissions" className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Submitted Leads</h2>
@@ -884,6 +953,8 @@ export const AdminDashboard = () => {
                 Showing {filteredSubmissions.length} of {submissions.length}
               </p>
             </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+            {unreadCount > 0 && <button type="button" onClick={() => void markAllSeen()} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Mark {unreadCount} new as read</button>}
             <button
               type="button"
               onClick={handleExportExcel}
@@ -895,6 +966,7 @@ export const AdminDashboard = () => {
               </svg>
               {isExporting ? 'Downloading...' : 'Download Excel'}
             </button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -907,7 +979,7 @@ export const AdminDashboard = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="admin-leads-table w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Patient Name</th>
@@ -928,41 +1000,52 @@ export const AdminDashboard = () => {
                     return (
                       <React.Fragment key={submission.id}>
                         <tr className="border-b border-gray-100">
-                          <td className="px-6 py-4 text-sm text-gray-900">{submission.fullName}</td>
-                          <td className="px-6 py-4 text-sm text-gray-900">{submission.submittedByEmail}</td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                            <div className="flex items-center gap-2">{submission.fullName}{!submission.adminSeenAt && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}</div>
+                          </td>
+                          <td className="break-all px-4 py-3 text-sm text-gray-900">{submission.submittedByEmail}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.contactNumber || 'Not provided'}
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                          <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-900">
                             {submission.reference}
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.documents.length} file(s)
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-gray-600">
                             {new Date(submission.submittedAt).toLocaleString()}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>
                               {status}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-wrap gap-2">
-                              {(['Pending', 'Approved', 'Rejected'] as SubmissionStatus[]).map((nextStatus) => (
-                                <button
-                                  key={nextStatus}
-                                  type="button"
-                                  onClick={() => updateStatus(submission.id, nextStatus)}
-                                  className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-50 transition"
-                                >
-                                  {nextStatus}
-                                </button>
-                              ))}
+                          <td className="px-4 py-3">
+                            <div className="flex min-w-[9rem] flex-col gap-2 xl:flex-row">
+                              {status === 'Pending' ? <select
+                                aria-label={`Decide status for ${submission.fullName}`}
+                                value=""
+                                onChange={(event) => {
+                                  const nextStatus = event.target.value as SubmissionStatus;
+                                  if (nextStatus) {
+                                    setStatusReason('');
+                                    setStatusAction({ submission, status: nextStatus });
+                                  }
+                                }}
+                                className="min-h-0 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500"
+                              >
+                                <option value="">Decision…</option>
+                                <option value="Approved">Approve</option>
+                                <option value="Rejected">Reject</option>
+                              </select> : <button type="button" onClick={() => { setStatusReason(''); setStatusAction({ submission, status: 'Pending' }); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100">Reopen</button>}
                               <button
                                 type="button"
-                                onClick={() => setExpandedId(isExpanded ? null : submission.id)}
-                                className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition"
+                                onClick={() => {
+                                  setExpandedId(isExpanded ? null : submission.id);
+                                  if (!submission.adminSeenAt) void markSeen(submission.id);
+                                }}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700"
                               >
                                 {isExpanded ? 'Hide Details' : 'Review'}
                               </button>
@@ -984,6 +1067,10 @@ export const AdminDashboard = () => {
                                       <dt className="text-gray-500">Status</dt>
                                       <dd className="text-gray-900 font-medium">{status}</dd>
                                     </div>
+                                    {submission.rejectionReason && <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                                      <dt className="font-semibold text-red-700">Rejection reason</dt>
+                                      <dd className="mt-1 whitespace-pre-wrap text-red-900">{submission.rejectionReason}</dd>
+                                    </div>}
                                     <div>
                                       <dt className="text-gray-500">Patient Name</dt>
                                       <dd className="text-gray-900 font-medium">{submission.fullName}</dd>
@@ -1020,6 +1107,15 @@ export const AdminDashboard = () => {
                                         {new Date(submission.submittedAt).toLocaleString()}
                                       </dd>
                                     </div>
+                                    {submission.statusHistory.length > 0 && <div className="sm:col-span-2 border-t border-slate-100 pt-4">
+                                      <dt className="mb-3 font-bold text-slate-900">Status history</dt>
+                                      <dd className="space-y-2">
+                                        {submission.statusHistory.map((event) => <div key={event.id} className="flex flex-col justify-between gap-1 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-center">
+                                          <span><strong>{event.fromStatus}</strong> → <strong>{event.toStatus}</strong>{event.reason && <span className="mt-1 block text-xs text-slate-600">{event.reason}</span>}</span>
+                                          <time className="text-xs text-slate-400">{new Date(event.createdAt).toLocaleString()}</time>
+                                        </div>)}
+                                      </dd>
+                                    </div>}
                                   </dl>
                                 </div>
 
@@ -1086,6 +1182,37 @@ export const AdminDashboard = () => {
           )}
         </section>
       </main>
+
+      {statusAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusAction.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : statusAction.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+              {statusAction.status === 'Pending' ? 'Reopen lead' : `${statusAction.status} lead`}
+            </span>
+            <h2 className="mt-4 text-xl font-bold text-slate-950">{statusAction.submission.fullName}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {statusAction.status === 'Approved' ? 'Confirm that this lead is ready to be approved. It will lock after approval.' : statusAction.status === 'Rejected' ? 'Explain clearly why this lead is being rejected. This message will be visible to the PRO.' : 'Explain why this completed decision needs another review.'}
+            </p>
+            {statusAction.status !== 'Approved' && <div className="mt-5">
+              <label htmlFor="statusReason" className="mb-2 block text-sm font-bold text-slate-700">Reason <span className="text-red-500">*</span></label>
+              <textarea id="statusReason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={4} maxLength={500} placeholder={statusAction.status === 'Rejected' ? 'Example: Required medical document is missing…' : 'Why is this lead being reopened?'} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+              <p className="mt-1 text-right text-xs text-slate-400">{statusReason.length}/500</p>
+            </div>}
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => { setStatusAction(null); setStatusReason(''); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button type="button" disabled={isUpdatingStatus || (statusAction.status !== 'Approved' && statusReason.trim().length < 5)} onClick={() => void updateStatus(statusAction.submission.id, statusAction.status, statusReason.trim())} className={`rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 ${statusAction.status === 'Rejected' ? 'bg-red-600 hover:bg-red-700' : statusAction.status === 'Approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}>{isUpdatingStatus ? 'Updating…' : 'Confirm update'}</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {newLeadNotice > 0 && <div className="fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-lg text-white">+</span>
+        <button type="button" onClick={() => { setNewLeadNotice(0); document.getElementById('submissions')?.scrollIntoView(); }} className="text-left">
+          <strong className="block text-sm text-slate-950">{newLeadNotice} new lead{newLeadNotice > 1 ? 's' : ''} received</strong>
+          <span className="mt-1 block text-xs text-slate-500">Tap to review the latest submission.</span>
+        </button>
+        <button type="button" onClick={() => setNewLeadNotice(0)} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss notification">×</button>
+      </div>}
     </div>
   );
 };
