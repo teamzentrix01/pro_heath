@@ -1,10 +1,28 @@
+import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 
-const resendApiKey = process.env.RESEND_API_KEY;
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = parseInt(process.env.SMTP_PORT || '465');
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
 
+const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-const FROM_EMAIL = process.env.EMAIL_FROM || 'PRO HealthTrack <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.SMTP_FROM || process.env.EMAIL_FROM || (smtpUser ? `PRO HealthTrack <${smtpUser}>` : 'PRO HealthTrack <onboarding@resend.dev>');
+
+// Create SMTP transporter if configured
+const transporter = smtpUser && smtpPass
+  ? nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // true for 465, false for other ports
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    })
+  : null;
 
 const statusColors: Record<string, { bg: string; text: string; label: string }> = {
   Pending: { bg: '#FEF3C7', text: '#92400E', label: 'Pending Review' },
@@ -19,11 +37,6 @@ export const sendStatusUpdateEmail = async (
   newStatus: string,
   submissionId: string
 ) => {
-  if (!resend) {
-    console.warn('RESEND_API_KEY not configured. Skipping email notification.');
-    return;
-  }
-
   const statusInfo = statusColors[newStatus] || statusColors.Pending;
   const greeting = proName ? `Hi ${proName}` : 'Hi';
 
@@ -92,15 +105,37 @@ export const sendStatusUpdateEmail = async (
     </html>
   `;
 
-  try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: proEmail,
-      subject: `Lead Status Update: ${patientName} — ${statusInfo.label}`,
-      html,
-    });
-    console.log(`Status email sent to ${proEmail} for submission ${submissionId}`);
-  } catch (error) {
-    console.error('Failed to send status update email:', error);
+  // Try SMTP first
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: FROM_EMAIL,
+        to: proEmail,
+        subject: `Lead Status Update: ${patientName} — ${statusInfo.label}`,
+        html,
+      });
+      console.log(`Status email sent via SMTP to ${proEmail} for submission ${submissionId}`);
+      return;
+    } catch (error) {
+      console.error('Failed to send status update email via SMTP:', error);
+    }
   }
+
+  // Fallback to Resend
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: proEmail,
+        subject: `Lead Status Update: ${patientName} — ${statusInfo.label}`,
+        html,
+      });
+      console.log(`Status email sent via Resend to ${proEmail} for submission ${submissionId}`);
+      return;
+    } catch (error) {
+      console.error('Failed to send status update email via Resend:', error);
+    }
+  }
+
+  console.warn('Neither SMTP nor Resend email service is configured. Skipping email notification.');
 };
