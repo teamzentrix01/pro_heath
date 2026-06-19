@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const authenticatedUser = await getAuthenticatedUser();
-    if (!authenticatedUser || authenticatedUser.role !== 'user') {
-      return NextResponse.json({ error: 'A user login is required.' }, { status: 401 });
+    if (!authenticatedUser || authenticatedUser.role !== 'pro') {
+      return NextResponse.json({ error: 'A PRO login is required.' }, { status: 401 });
     }
 
     const body = await request.json();

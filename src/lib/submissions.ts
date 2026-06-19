@@ -226,12 +226,69 @@ export const updateSubmissionStatus = async (id: string, status: SubmissionStatu
     `UPDATE form_submissions
      SET status = $1, reviewed_at = NOW(), updated_at = NOW()
      WHERE id = $2
-     RETURNING id`,
+     RETURNING id, user_id`,
     [status, id]
   );
 
   if (result.rowCount === 0) return null;
-  return getSubmissionById(id);
+
+  const submission = await getSubmissionById(id);
+
+  // Fetch PRO email for notification
+  let proEmail: string | null = null;
+  let proName: string | null = null;
+  if (result.rows[0].user_id) {
+    const userResult = await pool.query<{ email: string; full_name: string | null }>(
+      `SELECT email, full_name FROM app_users WHERE id = $1`,
+      [result.rows[0].user_id]
+    );
+    if (userResult.rows[0]) {
+      proEmail = userResult.rows[0].email;
+      proName = userResult.rows[0].full_name;
+    }
+  }
+
+  return { submission, proEmail, proName };
+};
+
+export const listSubmissionsByUserId = async (userId: string) => {
+  const result = await pool.query<SubmissionRow>(
+    `SELECT
+       fs.id,
+       fs.user_id,
+       au.email AS submitted_by_email,
+       au.full_name AS submitted_by_name,
+       fs.full_name,
+       fs.gender,
+       fs.age,
+       fs.contact_number,
+       fs.reference,
+       fs.status,
+       fs.submitted_at,
+       COALESCE(
+         jsonb_agg(
+           jsonb_build_object(
+             'id', sd.id,
+             'name', sd.file_name,
+             'type', sd.mime_type,
+             'size', sd.file_size,
+             'isImage', sd.is_image,
+             'dataUrl', sd.data_url
+           )
+           ORDER BY sd.created_at
+         ) FILTER (WHERE sd.id IS NOT NULL),
+         '[]'::jsonb
+       ) AS documents
+     FROM form_submissions fs
+     LEFT JOIN app_users au ON au.id = fs.user_id
+     LEFT JOIN submission_documents sd ON sd.submission_id = fs.id
+     WHERE fs.user_id = $1
+     GROUP BY fs.id, au.email, au.full_name
+     ORDER BY fs.submitted_at DESC`,
+    [userId]
+  );
+
+  return result.rows.map(mapSubmission);
 };
 
 export const getReferenceAnalytics = async (period: 'weekly' | 'monthly', date: string) => {

@@ -1,14 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { DocumentUpload } from './DocumentUpload';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
+import { SubmissionStatus, UserSubmission } from '@/types/submissions';
 
 const MAX_DOCUMENTS = 5;
 const MAX_DOCUMENT_SIZE_BYTES = 2 * 1024 * 1024;
 const MAX_TOTAL_DOCUMENT_SIZE_BYTES = 6 * 1024 * 1024;
+const POLL_INTERVAL_MS = 15_000;
+
+const statusStyles: Record<SubmissionStatus, string> = {
+  Pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  Approved: 'bg-green-100 text-green-800 border-green-200',
+  Rejected: 'bg-red-100 text-red-800 border-red-200',
+};
 
 export const UserForm = () => {
   const { user, updateUser, logout } = useAuth();
@@ -20,6 +28,11 @@ export const UserForm = () => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLeadsOpen, setIsLeadsOpen] = useState(false);
+  const [myLeads, setMyLeads] = useState<UserSubmission[]>([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const leadsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [profile, setProfile] = useState({
     fullName: user?.fullName ?? '',
     phoneNumber: user?.phoneNumber ?? '',
@@ -41,7 +54,7 @@ export const UserForm = () => {
   const [uploadResetKey, setUploadResetKey] = useState(0);
 
   const initials = useMemo(() => {
-    const label = user?.fullName || user?.email || 'U';
+    const label = user?.fullName || user?.email || 'P';
     return label
       .split(/[\s@.]+/)
       .filter(Boolean)
@@ -60,6 +73,39 @@ export const UserForm = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Load leads
+  const loadMyLeads = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingLeads(true);
+    try {
+      const response = await apiFetch('/api/submissions/my');
+      if (response.ok) {
+        const data = await response.json();
+        setMyLeads(data.submissions);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      if (!silent) setIsLoadingLeads(false);
+    }
+  }, []);
+
+  // Poll leads when leads panel is open
+  useEffect(() => {
+    if (isLeadsOpen) {
+      void loadMyLeads();
+      leadsPollRef.current = setInterval(() => {
+        void loadMyLeads(true);
+      }, POLL_INTERVAL_MS);
+    }
+
+    return () => {
+      if (leadsPollRef.current) {
+        clearInterval(leadsPollRef.current);
+        leadsPollRef.current = null;
+      }
+    };
+  }, [isLeadsOpen, loadMyLeads]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -158,7 +204,7 @@ export const UserForm = () => {
         throw new Error('Submission failed');
       }
 
-      setSuccessMessage('Form submitted successfully. Your documents have been received.');
+      setSuccessMessage('Lead submitted successfully. Your documents have been received.');
       setFormData({
         fullName: '',
         gender: '',
@@ -169,8 +215,13 @@ export const UserForm = () => {
       setDocuments([]);
       setDocumentError('');
       setUploadResetKey((key) => key + 1);
+
+      // Refresh leads if visible
+      if (isLeadsOpen) {
+        void loadMyLeads(true);
+      }
     } catch {
-      alert('Error submitting form. Please try again.');
+      alert('Error submitting lead. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -179,6 +230,17 @@ export const UserForm = () => {
   const handleLogout = () => {
     logout();
     router.push('/');
+  };
+
+  const handleExportMyLeads = async () => {
+    setIsExporting(true);
+    try {
+      const link = document.createElement('a');
+      link.href = apiUrl('/api/submissions/my/export');
+      link.click();
+    } finally {
+      setTimeout(() => setIsExporting(false), 2000);
+    }
   };
 
   const handleProfileSubmit = async (event: React.FormEvent) => {
@@ -239,15 +301,25 @@ export const UserForm = () => {
     }
   };
 
+  const leadStatusCounts = useMemo(() => {
+    return myLeads.reduce(
+      (acc, lead) => {
+        acc[lead.status] = (acc[lead.status] || 0) + 1;
+        return acc;
+      },
+      { Pending: 0, Approved: 0, Rejected: 0 } as Record<string, number>
+    );
+  }, [myLeads]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-              Health track
+              PRO HealthTrack
             </h1>
-            <p className="mt-1 text-sm text-slate-500">Healthcare Management System</p>
+            <p className="mt-1 text-sm text-slate-500">Healthcare Lead Management System</p>
           </div>
 
           <div ref={menuRef} className="relative flex items-center gap-3">
@@ -292,6 +364,19 @@ export const UserForm = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setIsLeadsOpen(true);
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-50 text-xs font-bold text-green-700">
+                    📋
+                  </span>
+                  My Leads ({myLeads.length || '...'})
+                </button>
+                <button
+                  type="button"
                   onClick={handleLogout}
                   className="w-full border-t border-slate-100 px-4 py-3 text-left text-sm font-medium text-red-600 transition hover:bg-red-50"
                 >
@@ -304,21 +389,6 @@ export const UserForm = () => {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* <section className="mb-6 rounded-lg border border-blue-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase text-blue-700">Patient submission</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-950">Submit health details</h2>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Complete the form below and upload any supporting documents for review.
-              </p>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Signed in as <span className="font-semibold text-slate-900">{user?.email}</span>
-            </div>
-          </div>
-        </section> */}
-
         <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           {successMessage && (
             <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
@@ -339,7 +409,7 @@ export const UserForm = () => {
                   value={formData.fullName}
                   onChange={handleInputChange}
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Enter your full name"
+                  placeholder="Enter patient's full name"
                 />
               </div>
 
@@ -372,7 +442,7 @@ export const UserForm = () => {
                   value={formData.age}
                   onChange={handleInputChange}
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Enter your age"
+                  placeholder="Enter patient's age"
                   min="1"
                   max="150"
                 />
@@ -425,13 +495,14 @@ export const UserForm = () => {
                 disabled={isSubmitting}
                 className="w-full rounded-lg bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-400 sm:w-auto"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Form'}
+                {isSubmitting ? 'Submitting...' : 'Submit Lead'}
               </button>
             </div>
           </form>
         </section>
       </main>
 
+      {/* Profile Modal */}
       {isProfileOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 px-4 py-8">
           <section className="max-h-full w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
@@ -569,6 +640,119 @@ export const UserForm = () => {
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {/* My Leads Modal */}
+      {isLeadsOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 px-4 py-8">
+          <section className="max-h-full w-full max-w-5xl overflow-y-auto rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-950">My Leads</h2>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Live
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  All patients you have referred — status updates in real-time
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLeadsOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Close leads"
+              >
+                x
+              </button>
+            </div>
+
+            {/* Lead Stats */}
+            <div className="grid grid-cols-4 gap-4 px-6 py-4 border-b border-slate-100">
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-center">
+                <p className="text-2xl font-bold text-blue-700">{myLeads.length}</p>
+                <p className="text-xs font-medium text-blue-600">Total</p>
+              </div>
+              <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3 text-center">
+                <p className="text-2xl font-bold text-yellow-700">{leadStatusCounts.Pending}</p>
+                <p className="text-xs font-medium text-yellow-600">Pending</p>
+              </div>
+              <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{leadStatusCounts.Approved}</p>
+                <p className="text-xs font-medium text-green-600">Approved</p>
+              </div>
+              <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-center">
+                <p className="text-2xl font-bold text-red-700">{leadStatusCounts.Rejected}</p>
+                <p className="text-xs font-medium text-red-600">Rejected</p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4">
+              {/* Download Button */}
+              <div className="flex justify-end mb-4">
+                <button
+                  type="button"
+                  onClick={handleExportMyLeads}
+                  disabled={isExporting || myLeads.length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {isExporting ? 'Downloading...' : 'Download Excel'}
+                </button>
+              </div>
+
+              {isLoadingLeads ? (
+                <div className="py-12 text-center text-slate-500">
+                  <p>Loading your leads...</p>
+                </div>
+              ) : myLeads.length === 0 ? (
+                <div className="py-12 text-center text-slate-500">
+                  <p className="text-lg font-medium">No leads yet</p>
+                  <p className="text-sm mt-1">Submit a patient form to start tracking your leads.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Patient Name</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Gender</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Age</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Reference</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Files</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Submitted</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myLeads.map((lead) => (
+                        <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
+                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{lead.fullName}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{lead.gender}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{lead.age}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{lead.reference}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{lead.documents.length}</td>
+                          <td className="px-4 py-3 text-sm text-slate-500">
+                            {new Date(lead.submittedAt).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[lead.status]}`}>
+                              {lead.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       )}

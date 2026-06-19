@@ -1,4 +1,5 @@
 import { updateSubmissionStatus } from '@/lib/submissions';
+import { sendStatusUpdateEmail } from '@/lib/email';
 import { requireAdmin } from '@/lib/auth';
 import { SubmissionStatus } from '@/types/submissions';
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,13 +24,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const submission = await updateSubmissionStatus(id, status);
+    const result = await updateSubmissionStatus(id, status);
 
-    if (!submission) {
+    if (!result) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ submission });
+    // Fire-and-forget email notification
+    if (result.proEmail && result.submission) {
+      void sendStatusUpdateEmail(
+        result.proEmail,
+        result.proName,
+        result.submission.fullName,
+        status,
+        id
+      );
+    }
+
+    return NextResponse.json({ submission: result.submission });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Unable to update submission status' }, { status: 500 });

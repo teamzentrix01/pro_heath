@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -11,7 +11,9 @@ import {
   UserSubmission,
 } from '@/types/submissions';
 import { AppUser } from '@/types/users';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
+
+const POLL_INTERVAL_MS = 15_000;
 
 const statusStyles: Record<SubmissionStatus, string> = {
   Pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -51,6 +53,15 @@ const getPeriodRange = (period: 'weekly' | 'monthly', dateValue: string) => {
   return { start, end };
 };
 
+const downloadFile = (dataUrl: string, fileName: string) => {
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 export const AdminDashboard = () => {
   const { logout } = useAuth();
   const router = useRouter();
@@ -82,10 +93,14 @@ export const AdminDashboard = () => {
   });
   const [userCreationMessage, setUserCreationMessage] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const loadSubmissions = useCallback(async () => {
-    setIsLoading(true);
-    setDashboardError('');
+  const loadSubmissions = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setDashboardError('');
+    }
 
     try {
       const response = await apiFetch('/api/submissions');
@@ -97,18 +112,34 @@ export const AdminDashboard = () => {
       const data = await response.json();
       setSubmissions(data.submissions);
     } catch {
-      setDashboardError('Unable to load submissions from the database.');
+      if (!silent) {
+        setDashboardError('Unable to load leads from the database.');
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadSubmissions();
     }, 0);
 
     return () => window.clearTimeout(timer);
+  }, [loadSubmissions]);
+
+  // Real-time polling every 15 seconds
+  useEffect(() => {
+    pollRef.current = setInterval(() => {
+      void loadSubmissions(true);
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [loadSubmissions]);
 
   const loadUsers = useCallback(async () => {
@@ -122,7 +153,7 @@ export const AdminDashboard = () => {
       setRegisteredUsers(data.users);
       setUserSummary(data.summary);
     } catch {
-      setDashboardError('Unable to load registered users from the database.');
+      setDashboardError('Unable to load registered PROs from the database.');
     }
   }, []);
 
@@ -167,7 +198,7 @@ export const AdminDashboard = () => {
         const response = await apiFetch(`/api/analytics/users?${params.toString()}`);
 
         if (!response.ok) {
-          throw new Error('Unable to load user analytics');
+          throw new Error('Unable to load PRO analytics');
         }
 
         const data = await response.json();
@@ -203,7 +234,18 @@ export const AdminDashboard = () => {
         )
       );
     } catch {
-      setDashboardError('Unable to update this submission status.');
+      setDashboardError('Unable to update this lead status.');
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const link = document.createElement('a');
+      link.href = apiUrl('/api/submissions/export');
+      link.click();
+    } finally {
+      setTimeout(() => setIsExporting(false), 2000);
     }
   };
 
@@ -335,15 +377,15 @@ export const AdminDashboard = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to create user');
+        throw new Error(data.error || 'Unable to create PRO');
       }
 
       setNewUser({ fullName: '', email: '', phoneNumber: '', password: '' });
-      setUserCreationMessage('User credentials created successfully.');
+      setUserCreationMessage('PRO credentials created successfully.');
       await loadUsers();
     } catch (error) {
       setUserCreationMessage(
-        error instanceof Error ? error.message : 'Unable to create user.'
+        error instanceof Error ? error.message : 'Unable to create PRO.'
       );
     } finally {
       setIsCreatingUser(false);
@@ -355,8 +397,14 @@ export const AdminDashboard = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900"> Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome to the admin panel</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-semibold text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Live
+              </span>
+            </div>
+            <p className="text-gray-600 mt-1">PRO HealthTrack — Lead Management</p>
           </div>
           <button
             onClick={handleLogout}
@@ -376,7 +424,7 @@ export const AdminDashboard = () => {
 
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-5">
-            <p className="text-gray-600 text-sm font-medium">Total Submissions</p>
+            <p className="text-gray-600 text-sm font-medium">Total Leads</p>
             <p className="text-4xl font-bold text-blue-600 mt-2">{submissions.length}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-5">
@@ -400,9 +448,9 @@ export const AdminDashboard = () => {
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 bg-white px-6 py-4">
-              <h2 className="text-xl font-bold text-gray-900">Create User Credentials</h2>
+              <h2 className="text-xl font-bold text-gray-900">Create PRO Credentials</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Only accounts created here can log in to Health track.
+                Only accounts created here can log in to PRO HealthTrack.
               </p>
             </div>
 
@@ -425,7 +473,7 @@ export const AdminDashboard = () => {
                     setNewUser((current) => ({ ...current, fullName: event.target.value }))
                   }
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Enter user's full name"
+                  placeholder="Enter PRO's full name"
                 />
               </div>
 
@@ -441,7 +489,7 @@ export const AdminDashboard = () => {
                     setNewUser((current) => ({ ...current, email: event.target.value }))
                   }
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="user@example.com"
+                  placeholder="pro@example.com"
                 />
               </div>
 
@@ -488,7 +536,7 @@ export const AdminDashboard = () => {
                   disabled={isCreatingUser}
                   className="w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-gray-400 sm:w-auto"
                 >
-                  {isCreatingUser ? 'Creating...' : 'Create User'}
+                  {isCreatingUser ? 'Creating...' : 'Create PRO'}
                 </button>
               </div>
             </form>
@@ -563,7 +611,7 @@ export const AdminDashboard = () => {
 
         <section className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Registered Users</h2>
+            <h2 className="text-xl font-bold text-gray-900">Registered PROs</h2>
             <p className="text-sm text-gray-600 mt-1">
               {userSummary.registeredUsers} registered, {userSummary.usersWhoLoggedIn} logged in,
               {' '}{userSummary.totalLogins} total login events
@@ -572,7 +620,7 @@ export const AdminDashboard = () => {
 
           {registeredUsers.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              <p>No registered users found.</p>
+              <p>No registered PROs found.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -583,7 +631,7 @@ export const AdminDashboard = () => {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Phone</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Forms</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Leads</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Logins</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Last Login</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Registered</th>
@@ -599,7 +647,7 @@ export const AdminDashboard = () => {
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {registeredUser.phoneNumber || 'Not provided'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 capitalize">{registeredUser.role}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900 capitalize">{registeredUser.role === 'pro' ? 'PRO' : registeredUser.role}</td>
                       <td className="px-6 py-4 text-sm font-semibold text-gray-900">
                         {registeredUser.submissionCount}
                       </td>
@@ -627,7 +675,7 @@ export const AdminDashboard = () => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Filters</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Search by date, name, contact, reference, status, document name, or any saved form detail.
+                Search by date, name, contact, reference, status, document name, or any saved lead detail.
               </p>
             </div>
             <button
@@ -645,7 +693,7 @@ export const AdminDashboard = () => {
             </button>
             <button
               type="button"
-              onClick={loadSubmissions}
+              onClick={() => void loadSubmissions()}
               className="border border-blue-300 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-50 transition"
             >
               Refresh
@@ -731,7 +779,7 @@ export const AdminDashboard = () => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Reference Analytics</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Track how many forms came through each reference or source.
+                Track how many leads came through each reference or source.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -765,13 +813,13 @@ export const AdminDashboard = () => {
           </div>
           <div className="mt-5 overflow-x-auto">
             {analyticsRows.length === 0 ? (
-              <p className="text-gray-500 text-sm">No submissions found for this selected period.</p>
+              <p className="text-gray-500 text-sm">No leads found for this selected period.</p>
             ) : (
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Reference / Source</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Forms Submitted</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total Leads</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -789,21 +837,21 @@ export const AdminDashboard = () => {
 
         <section className="bg-white rounded-lg shadow p-6">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">User Submission Analytics</h2>
+            <h2 className="text-xl font-bold text-gray-900">PRO Lead Analytics</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Forms submitted by each logged-in email for the selected analytics period.
+              Leads referred by each PRO for the selected analytics period.
             </p>
           </div>
           <div className="mt-5 overflow-x-auto">
             {userAnalyticsRows.length === 0 ? (
-              <p className="text-gray-500 text-sm">No user submissions found for this selected period.</p>
+              <p className="text-gray-500 text-sm">No PRO leads found for this selected period.</p>
             ) : (
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Forms Submitted</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total Leads</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Pending</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Approved</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Rejected</th>
@@ -829,28 +877,41 @@ export const AdminDashboard = () => {
         </section>
 
         <section className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-bold text-gray-900">Submitted Forms</h2>
-            <p className="text-sm text-gray-600">
-              Showing {filteredSubmissions.length} of {submissions.length}
-            </p>
+          <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Submitted Leads</h2>
+              <p className="text-sm text-gray-600">
+                Showing {filteredSubmissions.length} of {submissions.length}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {isExporting ? 'Downloading...' : 'Download Excel'}
+            </button>
           </div>
 
           {isLoading ? (
             <div className="p-8 text-center text-gray-500">
-              <p>Loading submissions...</p>
+              <p>Loading leads...</p>
             </div>
           ) : filteredSubmissions.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              <p>No submissions match the current filters.</p>
+              <p>No leads match the current filters.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted By</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Patient Name</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted By (PRO)</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Contact</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Reference</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Files</th>
@@ -913,7 +974,7 @@ export const AdminDashboard = () => {
                             <td colSpan={8} className="px-6 py-6">
                               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-white border border-gray-200 rounded-lg p-5">
-                                  <h3 className="font-bold text-gray-900 mb-4">Full Submission Details</h3>
+                                  <h3 className="font-bold text-gray-900 mb-4">Full Lead Details</h3>
                                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                     <div>
                                       <dt className="text-gray-500">Submission ID</dt>
@@ -924,11 +985,11 @@ export const AdminDashboard = () => {
                                       <dd className="text-gray-900 font-medium">{status}</dd>
                                     </div>
                                     <div>
-                                      <dt className="text-gray-500">Full Name</dt>
+                                      <dt className="text-gray-500">Patient Name</dt>
                                       <dd className="text-gray-900 font-medium">{submission.fullName}</dd>
                                     </div>
                                     <div>
-                                      <dt className="text-gray-500">Submitted By</dt>
+                                      <dt className="text-gray-500">Submitted By (PRO)</dt>
                                       <dd className="text-gray-900 font-medium break-all">
                                         {submission.submittedByEmail}
                                       </dd>
@@ -965,7 +1026,7 @@ export const AdminDashboard = () => {
                                 <div className="bg-white border border-gray-200 rounded-lg p-5">
                                   <h3 className="font-bold text-gray-900 mb-4">Uploaded Files</h3>
                                   {submission.documents.length === 0 ? (
-                                    <p className="text-sm text-gray-500">No files were uploaded with this form.</p>
+                                    <p className="text-sm text-gray-500">No files were uploaded with this lead.</p>
                                   ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                       {submission.documents.map((document, index) => {
@@ -994,6 +1055,18 @@ export const AdminDashboard = () => {
                                             <p className="text-xs text-gray-500 mt-1">
                                               {[file.type, formatFileSize(file.size)].filter(Boolean).join(' - ')}
                                             </p>
+                                            {file.dataUrl && (
+                                              <button
+                                                type="button"
+                                                onClick={() => downloadFile(file.dataUrl!, file.name)}
+                                                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                                              >
+                                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                </svg>
+                                                Download
+                                              </button>
+                                            )}
                                           </div>
                                         );
                                       })}

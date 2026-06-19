@@ -62,7 +62,7 @@ export const createUser = async (input: {
        role,
        admin_created
      )
-     VALUES (LOWER($1), LOWER($1), crypt($2, gen_salt('bf')), $3, $4, 'user', TRUE)
+     VALUES (LOWER($1), LOWER($1), crypt($2, gen_salt('bf')), $3, $4, 'pro', TRUE)
      RETURNING ${userColumns}`,
     [input.email, input.password, input.fullName, input.phoneNumber]
   );

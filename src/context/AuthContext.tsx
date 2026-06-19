@@ -11,6 +11,7 @@ export interface AuthUser {
   phoneNumber: string;
   role: AppUser['role'];
   isAdmin: boolean;
+  isPro: boolean;
 }
 
 interface AuthContextType {
@@ -32,6 +33,7 @@ const toAuthUser = (user: AppUser): AuthUser => ({
   phoneNumber: user.phoneNumber,
   role: user.role,
   isAdmin: user.role === 'admin',
+  isPro: user.role === 'pro',
 });
 
 const getSavedUser = (): AuthUser | null => {

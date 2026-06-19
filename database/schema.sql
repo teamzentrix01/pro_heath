@@ -44,8 +44,8 @@ CREATE TABLE IF NOT EXISTS app_users (
     full_name VARCHAR(150),
     phone_number VARCHAR(10)
         CHECK (phone_number IS NULL OR phone_number ~ '^[0-9]{10}$'),
-    role VARCHAR(20) NOT NULL DEFAULT 'user'
-        CHECK (role IN ('admin', 'user')),
+    role VARCHAR(20) NOT NULL DEFAULT 'pro'
+        CHECK (role IN ('admin', 'pro')),
     login_count INTEGER NOT NULL DEFAULT 0 CHECK (login_count >= 0),
     last_login_at TIMESTAMPTZ,
     last_login_ip INET,
@@ -58,7 +58,7 @@ ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS full_name VARCHAR(150);
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(10);
-ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'pro';
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS login_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_ip INET;
@@ -127,3 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id
 
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
     ON auth_sessions (expires_at);
+
+-- Migration: rename role 'user' to 'pro'
+ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check;
+UPDATE app_users SET role = 'pro' WHERE role = 'user';
+ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro'));

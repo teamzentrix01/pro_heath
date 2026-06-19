@@ -7,8 +7,8 @@ import "./globals.css";
 // Uncomment this when using a layout server component
 /*
 export const metadata: Metadata = {
-  title: "Health track ",
-  description: "Healthcare Management System",
+  title: "PRO HealthTrack",
+  description: "Healthcare Lead Management System",
 };
 */
 
