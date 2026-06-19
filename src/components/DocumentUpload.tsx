@@ -16,6 +16,7 @@ export const DocumentUpload = ({ onFilesChange, error }: DocumentUploadProps) =>
     const newFiles = [...files, ...selectedFiles];
     setFiles(newFiles);
     onFilesChange(newFiles);
+    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {

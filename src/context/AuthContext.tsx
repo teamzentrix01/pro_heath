@@ -22,7 +22,8 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const AUTH_STORAGE_KEY = 'health_track _user';
+const AUTH_STORAGE_KEY = 'health_track_user';
+const LEGACY_AUTH_STORAGE_KEY = 'health_track _user';
 
 const toAuthUser = (user: AppUser): AuthUser => ({
   id: user.id,
@@ -37,10 +38,13 @@ const getSavedUser = (): AuthUser | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    const savedUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    const savedUser =
+      window.localStorage.getItem(AUTH_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
     return savedUser ? (JSON.parse(savedUser) as AuthUser) : null;
   } catch {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
     return null;
   }
 };
@@ -49,20 +53,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setUser(getSavedUser());
-      setIsAuthReady(true);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
-
   const saveUser = (nextUser: AppUser) => {
     const authenticatedUser = toAuthUser(nextUser);
     setUser(authenticatedUser);
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticatedUser));
+    window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateSession = async () => {
+      const savedUser = getSavedUser();
+      if (savedUser) {
+        setUser(savedUser);
+      }
+
+      try {
+        const response = await apiFetch('/api/auth/me');
+
+        if (!response.ok) {
+          throw new Error('Session expired');
+        }
+
+        const data = await response.json();
+        if (isMounted) {
+          saveUser(data.user);
+        }
+      } catch {
+        if (isMounted) {
+          setUser(null);
+          window.localStorage.removeItem(AUTH_STORAGE_KEY);
+          window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+        }
+      } finally {
+        if (isMounted) {
+          setIsAuthReady(true);
+        }
+      }
+    };
+
+    void hydrateSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const login = async (email: string, password: string) => {
     try {
@@ -94,6 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     void apiFetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   };
 
   return (

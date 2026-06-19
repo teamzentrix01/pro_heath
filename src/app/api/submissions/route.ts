@@ -14,6 +14,7 @@ type SubmissionDocumentInput = {
 const MAX_DOCUMENTS = 5;
 const MAX_DOCUMENT_SIZE_BYTES = 2 * 1024 * 1024;
 const MAX_TOTAL_DOCUMENT_SIZE_BYTES = 6 * 1024 * 1024;
+const allowedGenders = ['Male', 'Female', 'Other'];
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,9 +52,10 @@ export async function POST(request: NextRequest) {
 
     if (
       !body.fullName?.trim() ||
-      !body.gender ||
+      !allowedGenders.includes(body.gender) ||
       !Number.isInteger(age) ||
       age < 1 ||
+      age > 150 ||
       (
         body.contactNumber?.trim() &&
         !/^\d{10}$/.test(body.contactNumber.trim())

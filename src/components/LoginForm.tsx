@@ -79,7 +79,7 @@ export const LoginForm = () => {
               ref={emailInputRef}
               type="text"
               id="email"
-              name="health_track _email"
+              name="health_track_email"
               value={email}
               readOnly={!canEdit}
               onFocus={() => setCanEdit(true)}
@@ -101,7 +101,7 @@ export const LoginForm = () => {
               ref={passwordInputRef}
               type="password"
               id="password"
-              name="health_track _access_key"
+              name="health_track_access_key"
               value={password}
               readOnly={!canEdit}
               onFocus={() => setCanEdit(true)}

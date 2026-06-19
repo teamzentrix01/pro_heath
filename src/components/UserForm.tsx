@@ -100,6 +100,9 @@ export const UserForm = () => {
     const error = validateDocuments(files);
     setDocumentError(error);
     setDocuments(error ? [] : files);
+    if (error) {
+      setUploadResetKey((key) => key + 1);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
