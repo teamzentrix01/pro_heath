@@ -76,14 +76,8 @@ export const AdminDashboard = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [analyticsDate, setAnalyticsDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [userAnalyticsRows, setUserAnalyticsRows] = useState<UserAnalyticsRow[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<AppUser[]>([]);
-  const [userSummary, setUserSummary] = useState({
-    registeredUsers: 0,
-    usersWhoLoggedIn: 0,
-    totalLogins: 0,
-  });
   const [newUser, setNewUser] = useState({
     fullName: '',
     email: '',
@@ -164,7 +158,6 @@ export const AdminDashboard = () => {
 
       const data = await response.json();
       setRegisteredUsers(data.users);
-      setUserSummary(data.summary);
     } catch {
       setDashboardError('Unable to load team accounts from the database.');
     }
@@ -313,49 +306,6 @@ export const AdminDashboard = () => {
   const totalReferralAmount = submissions.reduce((sum, submission) => sum + (submission.referralAmount ?? 0), 0);
   const paidReferralAmount = submissions.filter((submission) => submission.paymentStatus === 'Paid').reduce((sum, submission) => sum + (submission.referralAmount ?? 0), 0);
   const unreadCount = submissions.filter((submission) => !submission.adminSeenAt).length;
-  const calendarTitle = calendarDate.toLocaleString(undefined, {
-    month: 'long',
-    year: 'numeric',
-  });
-  const calendarDays = useMemo(() => {
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPreviousMonth = new Date(year, month, 0).getDate();
-    const today = new Date();
-    const cells: Array<{ day: number; currentMonth: boolean; isToday: boolean }> = [];
-
-    for (let index = firstDayOfMonth - 1; index >= 0; index -= 1) {
-      cells.push({
-        day: daysInPreviousMonth - index,
-        currentMonth: false,
-        isToday: false,
-      });
-    }
-
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      cells.push({
-        day,
-        currentMonth: true,
-        isToday:
-          day === today.getDate() &&
-          month === today.getMonth() &&
-          year === today.getFullYear(),
-      });
-    }
-
-    const remainingCells = 42 - cells.length;
-    for (let day = 1; day <= remainingCells; day += 1) {
-      cells.push({
-        day,
-        currentMonth: false,
-        isToday: false,
-      });
-    }
-
-    return cells;
-  }, [calendarDate]);
 
   const handleLogout = () => {
     logout();
@@ -493,7 +443,7 @@ export const AdminDashboard = () => {
           <div className="bg-white rounded-lg shadow p-5"><p className="text-gray-600 text-sm font-medium">Referral Paid</p><p className="mt-2 text-3xl font-bold text-emerald-600">₹{paidReferralAmount.toLocaleString('en-IN')}</p></div>
         </section>
 
-        <section id="pros" className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section id="pros" className="max-w-3xl">
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 bg-white px-6 py-4">
               <h2 className="text-xl font-bold text-gray-900">Create PRO Credentials</h2>
@@ -589,81 +539,12 @@ export const AdminDashboard = () => {
               </div>
             </form>
           </div>
-
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 bg-white px-6 py-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Calendar</h2>
-                  <p className="mt-1 text-sm text-gray-600">Quick monthly view for admin planning.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCalendarDate(new Date())}
-                  className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-                >
-                  Today
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() =>
-                    setCalendarDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-lg text-gray-700 transition hover:bg-gray-50"
-                >
-                  ‹
-                </button>
-                <p className="text-base font-bold text-gray-900">{calendarTitle}</p>
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() =>
-                    setCalendarDate((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-lg text-gray-700 transition hover:bg-gray-50"
-                >
-                  ›
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-1.5 text-center">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="py-1 text-xs font-bold uppercase text-gray-500">
-                    {day}
-                  </div>
-                ))}
-                {calendarDays.map((day, index) => (
-                  <div
-                    key={`${day.day}-${index}`}
-                    className={`flex h-10 items-center justify-center rounded-md text-xs font-semibold transition sm:h-11 xl:h-12 ${
-                      day.isToday
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : day.currentMonth
-                          ? 'bg-gray-50 text-gray-900 hover:bg-blue-50'
-                          : 'bg-white text-gray-300'
-                    }`}
-                  >
-                    {day.day}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
 
         <section className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200">
             <h2 className="text-xl font-bold text-gray-900">PRO & Doctor Accounts</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {userSummary.registeredUsers} registered, {userSummary.usersWhoLoggedIn} logged in,
-              {' '}{userSummary.totalLogins} total login events
-            </p>
+            <p className="text-sm text-gray-600 mt-1">Account directory with assigned roles.</p>
           </div>
 
           {registeredUsers.length === 0 ? (
@@ -679,10 +560,6 @@ export const AdminDashboard = () => {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Phone</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Leads</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Logins</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Last Login</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Registered</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -696,20 +573,6 @@ export const AdminDashboard = () => {
                         {registeredUser.phoneNumber || 'Not provided'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 capitalize">{registeredUser.role === 'pro' ? 'PRO' : registeredUser.role}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                        {registeredUser.submissionCount}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                        {registeredUser.loginCount}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {registeredUser.lastLoginAt
-                          ? new Date(registeredUser.lastLoginAt).toLocaleString()
-                          : 'Never'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {new Date(registeredUser.createdAt).toLocaleString()}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -904,12 +767,12 @@ export const AdminDashboard = () => {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Patient Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted By (PRO)</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Referral Source</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Contact</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Doctor / PRO</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Files</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Approval</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Treatment & Referral</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
@@ -924,22 +787,92 @@ export const AdminDashboard = () => {
                           <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                             <div className="flex items-center gap-2">{submission.fullName}{!submission.adminSeenAt && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}</div>
                           </td>
-                          <td className="break-all px-4 py-3 text-sm text-gray-900">{submission.submittedByEmail}</td>
+                          {/* 2. Referral Source */}
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {submission.submittedByRole === 'doctor' ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 border border-teal-200 uppercase tracking-wider">
+                                  Doctor Referral
+                                </span>
+                                <div className="font-semibold text-slate-800">
+                                  Dr. {submission.submittedByName}
+                                </div>
+                                <div className="text-xs text-slate-400 break-all">
+                                  {submission.submittedByEmail}
+                                </div>
+                                <div className="mt-1">
+                                  <span className="text-[11px] font-medium text-blue-600 bg-blue-50/70 border border-blue-100 px-1.5 py-0.5 rounded inline-block">
+                                    PRO: {submission.parentProName}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : submission.submittedByRole === 'pro' ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+                                  Direct PRO
+                                </span>
+                                <div className="font-semibold text-slate-800">
+                                  {submission.submittedByName}
+                                </div>
+                                <div className="text-xs text-slate-400 break-all">
+                                  {submission.submittedByEmail}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200 uppercase tracking-wider">
+                                  Admin Submission
+                                </span>
+                                <div className="font-semibold text-slate-800">
+                                  {submission.submittedByName}
+                                </div>
+                                <div className="text-xs text-slate-400 break-all">
+                                  {submission.submittedByEmail}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 3. Contact */}
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.contactNumber || 'Not provided'}
                           </td>
-                          <td className="max-w-xs px-4 py-3 text-sm text-gray-900"><span className="font-medium">{submission.submittedByName}</span><span className="block text-xs capitalize text-slate-400">{submission.submittedByRole}{submission.parentProName && submission.submittedByRole === 'doctor' ? ` · ${submission.parentProName}` : ''}</span></td>
+
+                          {/* 4. Files */}
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.documents.length} file(s)
                           </td>
+
+                          {/* 5. Submitted */}
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {new Date(submission.submittedAt).toLocaleString()}
                           </td>
+
+                          {/* 6. Approval */}
                           <td className="px-4 py-3">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>
                               {status}
                             </span>
                           </td>
+
+                          {/* 7. Treatment & Referral */}
+                          <td className="px-4 py-3">
+                            {status === 'Approved' ? (
+                              <CareManagement
+                                submission={submission}
+                                compact={true}
+                                onUpdated={(updated) =>
+                                  setSubmissions((current) =>
+                                    current.map((item) => (item.id === updated.id ? updated : item))
+                                  )
+                                }
+                              />
+                            ) : (
+                              <span className="text-gray-400 text-xs font-medium">—</span>
+                            )}
+                          </td>
+
+                          {/* 8. Actions */}
                           <td className="px-4 py-3">
                             <div className="flex min-w-[9rem] flex-col gap-2 xl:flex-row">
                               {status === 'Pending' ? <select

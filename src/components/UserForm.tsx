@@ -7,9 +7,7 @@ import { DocumentUpload } from './DocumentUpload';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { SubmissionStatus, UserSubmission } from '@/types/submissions';
 import { DoctorManagement } from './DoctorManagement';
-import { CareManagement } from './CareManagement';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
-import { LeadDecisionControls } from './LeadDecisionControls';
 
 const MAX_DOCUMENTS = 5;
 const MAX_DOCUMENT_SIZE_BYTES = 2 * 1024 * 1024;
@@ -895,8 +893,6 @@ export const UserForm = () => {
                             {lead.status === 'Pending' && lead.statusHistory.length > 0 && <div className="mt-2 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800"><strong className="block">Reopened for review</strong>{lead.statusHistory[0].reason || 'The admin has reopened this lead.'}</div>}
                             <div className="mt-2 text-xs text-slate-500"><strong>Treatment:</strong> {lead.treatmentStatus}<br/><strong>Payment:</strong> {lead.paymentStatus}</div>
                             {user?.isDoctor && <PaymentMethodSelector submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
-                            {user?.isPro && <LeadDecisionControls submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
-                            {user?.isPro && <CareManagement submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
                           </td>
                         </tr>
                       ))}
