@@ -1,5 +1,5 @@
 import { SESSION_COOKIE_NAME, hashSessionToken } from '@/lib/auth';
-import { pool } from '@/lib/db';
+import { dbQuery } from '@/lib/db';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -8,7 +8,7 @@ export async function POST() {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   if (token) {
-    await pool.query('DELETE FROM auth_sessions WHERE token_hash = $1', [
+    await dbQuery('DELETE FROM auth_sessions WHERE token_hash = $1', [
       hashSessionToken(token),
     ]);
   }

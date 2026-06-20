@@ -1,6 +1,6 @@
-import { updateSubmissionStatus } from '@/lib/submissions';
+import { canManageSubmission, updateSubmissionStatus } from '@/lib/submissions';
 import { sendStatusUpdateEmail } from '@/lib/email';
-import { requireAdmin } from '@/lib/auth';
+import { getAuthenticatedUser } from '@/lib/auth';
 import { SubmissionStatus } from '@/types/submissions';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -11,12 +11,15 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Admin access is required.' }, { status: 403 });
+    const reviewer = await getAuthenticatedUser();
+    if (!reviewer || !['admin', 'pro'].includes(reviewer.role)) {
+      return NextResponse.json({ error: 'Admin or PRO access is required.' }, { status: 403 });
     }
 
     const { id } = await context.params;
+    if (!(await canManageSubmission(id, reviewer.id, reviewer.role))) {
+      return NextResponse.json({ error: 'This lead is not assigned to you.' }, { status: 403 });
+    }
     const body = await request.json();
     const status = body.status as SubmissionStatus;
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
@@ -39,7 +42,7 @@ export async function PATCH(
       );
     }
 
-    const result = await updateSubmissionStatus(id, status, admin.id, reason || null);
+    const result = await updateSubmissionStatus(id, status, reviewer.id, reason || null);
 
     if (!result) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });

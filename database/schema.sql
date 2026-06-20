@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     phone_number VARCHAR(10)
         CHECK (phone_number IS NULL OR phone_number ~ '^[0-9]{10}$'),
     role VARCHAR(20) NOT NULL DEFAULT 'pro'
-        CHECK (role IN ('admin', 'pro')),
+        CHECK (role IN ('admin', 'pro', 'doctor')),
     login_count INTEGER NOT NULL DEFAULT 0 CHECK (login_count >= 0),
     last_login_at TIMESTAMPTZ,
     last_login_ip INET,
@@ -66,6 +66,8 @@ ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_user_agent TEXT;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS admin_created BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS created_by_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 UPDATE app_users
 SET email = LOWER(COALESCE(email, login_id))
@@ -110,6 +112,19 @@ ALTER TABLE form_submissions
 ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS admin_seen_at TIMESTAMPTZ;
 ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMPTZ;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS father_name VARCHAR(150);
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS current_location TEXT;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS treatment_status VARCHAR(40) NOT NULL DEFAULT 'Not Started';
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS referral_amount NUMERIC(12,2);
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30);
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS payment_details JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) NOT NULL DEFAULT 'Not Applicable';
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS transaction_reference VARCHAR(150);
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS payment_updated_at TIMESTAMPTZ;
+
+ALTER TABLE form_submissions ALTER COLUMN reference SET DEFAULT '';
 
 ALTER TABLE form_submissions
     ALTER COLUMN contact_number DROP NOT NULL;
@@ -153,4 +168,32 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
 -- Migration: rename role 'user' to 'pro'
 ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check;
 UPDATE app_users SET role = 'pro' WHERE role = 'user';
-ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro'));
+ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro', 'doctor'));
+
+ALTER TABLE form_submissions DROP CONSTRAINT IF EXISTS form_submissions_treatment_status_check;
+ALTER TABLE form_submissions ADD CONSTRAINT form_submissions_treatment_status_check
+    CHECK (treatment_status IN ('Not Started', 'Admitted', 'Medicine Taken & Patient Left', 'Discharged'));
+
+ALTER TABLE form_submissions DROP CONSTRAINT IF EXISTS form_submissions_payment_method_check;
+ALTER TABLE form_submissions ADD CONSTRAINT form_submissions_payment_method_check
+    CHECK (payment_method IS NULL OR payment_method IN ('UPI', 'Cash', 'Bank Transfer'));
+
+ALTER TABLE form_submissions DROP CONSTRAINT IF EXISTS form_submissions_payment_status_check;
+ALTER TABLE form_submissions ADD CONSTRAINT form_submissions_payment_status_check
+    CHECK (payment_status IN ('Not Applicable', 'Awaiting Method', 'Payment Pending', 'Processing', 'Paid', 'Payment Failed', 'On Hold'));
+
+CREATE INDEX IF NOT EXISTS idx_app_users_created_by ON app_users (created_by_user_id, role);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_payment_status ON form_submissions (payment_status);
+
+CREATE TABLE IF NOT EXISTS submission_payment_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    submission_id UUID NOT NULL REFERENCES form_submissions(id) ON DELETE CASCADE,
+    changed_by UUID REFERENCES app_users(id) ON DELETE SET NULL,
+    payment_status VARCHAR(30) NOT NULL,
+    amount NUMERIC(12,2),
+    payment_method VARCHAR(30),
+    transaction_reference VARCHAR(150),
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payment_history_submission ON submission_payment_history (submission_id, created_at DESC);

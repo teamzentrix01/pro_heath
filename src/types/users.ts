@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'pro';
+export type UserRole = 'admin' | 'pro' | 'doctor';
 
 export interface AppUser {
   id: string;
@@ -6,6 +6,8 @@ export interface AppUser {
   fullName: string;
   phoneNumber: string;
   role: UserRole;
+  createdByUserId: string | null;
+  isActive: boolean;
   loginCount: number;
   submissionCount: number;
   lastLoginAt: string | null;

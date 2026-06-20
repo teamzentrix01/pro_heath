@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { DocumentUpload } from './DocumentUpload';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { SubmissionStatus, UserSubmission } from '@/types/submissions';
+import { DoctorManagement } from './DoctorManagement';
+import { CareManagement } from './CareManagement';
+import { PaymentMethodSelector } from './PaymentMethodSelector';
+import { LeadDecisionControls } from './LeadDecisionControls';
 
 const MAX_DOCUMENTS = 5;
 const MAX_DOCUMENT_SIZE_BYTES = 2 * 1024 * 1024;
@@ -31,6 +35,8 @@ export const UserForm = () => {
   const [isLeadsOpen, setIsLeadsOpen] = useState(false);
   const [myLeads, setMyLeads] = useState<UserSubmission[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const [leadsError, setLeadsError] = useState('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const leadsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [profile, setProfile] = useState({
@@ -43,15 +49,19 @@ export const UserForm = () => {
 
   const [formData, setFormData] = useState({
     fullName: '',
+    fatherName: '',
     gender: '',
     age: '',
     contactNumber: '',
-    reference: '',
+    address: '',
+    currentLocation: '',
   });
 
   const [documents, setDocuments] = useState<File[]>([]);
   const [documentError, setDocumentError] = useState('');
   const [uploadResetKey, setUploadResetKey] = useState(0);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
 
   const initials = useMemo(() => {
     const label = user?.fullName || user?.email || 'P';
@@ -77,14 +87,14 @@ export const UserForm = () => {
   // Load leads
   const loadMyLeads = useCallback(async (silent = false) => {
     if (!silent) setIsLoadingLeads(true);
+    setLeadsError('');
     try {
       const response = await apiFetch('/api/submissions/my');
-      if (response.ok) {
-        const data = await response.json();
-        setMyLeads(data.submissions);
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to load patient records.');
+      setMyLeads(Array.isArray(data.submissions) ? data.submissions : []);
     } catch {
-      // silently fail
+      setLeadsError('Patient records could not be loaded. Please retry.');
     } finally {
       if (!silent) setIsLoadingLeads(false);
     }
@@ -130,6 +140,55 @@ export const UserForm = () => {
     }));
   };
 
+  const handleUseCurrentLocation = () => {
+    setLocationMessage('');
+
+    if (!navigator.geolocation) {
+      setLocationMessage('Location access is not supported by this browser.');
+      return;
+    }
+
+    setIsFetchingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const latitude = coords.latitude.toFixed(6);
+        const longitude = coords.longitude.toFixed(6);
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+            { headers: { Accept: 'application/json' } }
+          );
+
+          if (!response.ok) throw new Error('Unable to find address');
+          const location = (await response.json()) as { display_name?: string };
+          const readableLocation = location.display_name?.trim();
+          if (!readableLocation) throw new Error('Readable address not found');
+
+          setFormData((previous) => ({
+            ...previous,
+            currentLocation: readableLocation,
+          }));
+          setLocationMessage('Complete available address fetched successfully.');
+        } catch {
+          setLocationMessage('Readable address could not be fetched. Please enter it manually.');
+        } finally {
+          setIsFetchingLocation(false);
+        }
+      },
+      (error) => {
+        const messages: Record<number, string> = {
+          1: 'Location permission was denied. Please allow location access and try again.',
+          2: 'Current location is unavailable. Please turn on GPS and try again.',
+          3: 'Location request timed out. Please try again.',
+        };
+        setLocationMessage(messages[error.code] ?? 'Unable to fetch current location.');
+        setIsFetchingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
+    );
+  };
+
   const readFileAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -170,10 +229,12 @@ export const UserForm = () => {
 
     if (
       !formData.fullName.trim() ||
+      !formData.fatherName.trim() ||
       !formData.gender ||
       !formData.age ||
       (formData.contactNumber && !/^\d{10}$/.test(formData.contactNumber)) ||
-      !formData.reference.trim()
+      !formData.address.trim() ||
+      !formData.currentLocation.trim()
     ) {
       alert('Please fill in all required fields. If you enter a contact number, use 10 digits.');
       return;
@@ -205,10 +266,12 @@ export const UserForm = () => {
         },
         body: JSON.stringify({
           fullName: formData.fullName,
+          fatherName: formData.fatherName,
           gender: formData.gender,
           age: parseInt(formData.age),
           contactNumber: formData.contactNumber,
-          reference: formData.reference,
+          address: formData.address,
+          currentLocation: formData.currentLocation,
           documents: uploadedFiles,
         }),
       });
@@ -220,10 +283,12 @@ export const UserForm = () => {
       setSuccessMessage('Lead submitted successfully. Your documents have been received.');
       setFormData({
         fullName: '',
+        fatherName: '',
         gender: '',
         age: '',
         contactNumber: '',
-        reference: '',
+        address: '',
+        currentLocation: '',
       });
       setDocuments([]);
       setDocumentError('');
@@ -323,6 +388,21 @@ export const UserForm = () => {
       { Pending: 0, Approved: 0, Rejected: 0 } as Record<string, number>
     );
   }, [myLeads]);
+  const referralSummary = useMemo(() => ({
+    earned: myLeads.reduce((sum, lead) => sum + (lead.referralAmount ?? 0), 0),
+    paid: myLeads.filter((lead) => lead.paymentStatus === 'Paid').reduce((sum, lead) => sum + (lead.referralAmount ?? 0), 0),
+  }), [myLeads]);
+  const displayedLeads = useMemo(
+    () => selectedDoctorId ? myLeads.filter((lead) => lead.userId === selectedDoctorId) : myLeads,
+    [myLeads, selectedDoctorId]
+  );
+  const displayedLeadCounts = useMemo(() => displayedLeads.reduce(
+    (counts, lead) => ({ ...counts, [lead.status]: counts[lead.status] + 1 }),
+    { Pending: 0, Approved: 0, Rejected: 0 } as Record<SubmissionStatus, number>
+  ), [displayedLeads]);
+  const selectedDoctorName = selectedDoctorId
+    ? myLeads.find((lead) => lead.userId === selectedDoctorId)?.submittedByName
+    : '';
 
   return (
     <div className="app-surface user-dashboard text-slate-950">
@@ -378,6 +458,7 @@ export const UserForm = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setSelectedDoctorId(null);
                     setIsLeadsOpen(true);
                     setIsMenuOpen(false);
                   }}
@@ -405,10 +486,10 @@ export const UserForm = () => {
         <section className="user-hero">
           <div className="relative z-[1]">
             <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-blue-50">
-              PRO workspace
+              {user?.isDoctor ? 'Doctor workspace' : 'PRO workspace'}
             </span>
-            <h2 className="mt-4">Welcome back, {user?.fullName?.split(' ')[0] || 'PRO'}</h2>
-            <p>Refer a patient securely, attach their documents, and track every lead from one simple workspace.</p>
+            <h2 className="mt-4">Welcome back, {user?.fullName?.split(' ')[0] || (user?.isDoctor ? 'Doctor' : 'PRO')}</h2>
+            <p>Submit patient details securely, attach medical reports, and track treatment and referral payments.</p>
           </div>
           <div className="hero-badge" aria-hidden="true">✚</div>
         </section>
@@ -416,11 +497,13 @@ export const UserForm = () => {
         <section className="user-stat-grid" aria-label="Lead summary">
           <div className="user-stat"><strong>{myLeads.length}</strong><span>Total leads</span></div>
           <div className="user-stat"><strong className="!text-amber-600">{leadStatusCounts.Pending}</strong><span>Pending</span></div>
-          <div className="user-stat"><strong className="!text-emerald-600">{leadStatusCounts.Approved}</strong><span>Approved</span></div>
-          <button type="button" onClick={() => setIsLeadsOpen(true)} className="user-stat text-left transition hover:-translate-y-0.5 hover:shadow-lg">
-            <strong className="!text-blue-600">View</strong><span>My lead history →</span>
+          <div className="user-stat"><strong className="!text-emerald-600">{user?.isDoctor ? `₹${referralSummary.earned.toLocaleString('en-IN')}` : leadStatusCounts.Approved}</strong><span>{user?.isDoctor ? 'Referral earned' : 'Approved'}</span></div>
+          <button type="button" onClick={() => { setSelectedDoctorId(null); setIsLeadsOpen(true); }} className="user-stat text-left transition hover:-translate-y-0.5 hover:shadow-lg">
+            <strong className="!text-blue-600">{user?.isDoctor ? `₹${referralSummary.paid.toLocaleString('en-IN')}` : 'View'}</strong><span>{user?.isDoctor ? 'Referral paid →' : 'My lead history →'}</span>
           </button>
         </section>
+
+        {user?.isPro && <DoctorManagement onViewPatients={(doctorId) => { setSelectedDoctorId(doctorId); setIsLeadsOpen(true); void loadMyLeads(); }} />}
 
         <section className="user-form-card rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="form-heading">
@@ -470,6 +553,11 @@ export const UserForm = () => {
               </div>
 
               <div>
+                <label htmlFor="fatherName" className="mb-2 block text-sm font-semibold text-slate-700">Father&apos;s Name <span className="text-red-500">*</span></label>
+                <input type="text" id="fatherName" name="fatherName" value={formData.fatherName} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Enter father's name" />
+              </div>
+
+              <div>
                 <label htmlFor="age" className="mb-2 block text-sm font-semibold text-slate-700">
                   Age <span className="text-red-500">*</span>
                 </label>
@@ -506,19 +594,34 @@ export const UserForm = () => {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="reference" className="mb-2 block text-sm font-semibold text-slate-700">
-                Reference <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                id="reference"
-                name="reference"
-                value={formData.reference}
-                onChange={handleInputChange}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Enter reference details"
-                rows={4}
-              />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div><label htmlFor="address" className="mb-2 block text-sm font-semibold text-slate-700">Permanent Address <span className="text-red-500">*</span></label><textarea id="address" name="address" value={formData.address} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Full permanent address" rows={3} /></div>
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="currentLocation" className="text-sm font-semibold text-slate-700">
+                    Current Location <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    disabled={isFetchingLocation}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 ${isFetchingLocation ? 'animate-pulse' : ''}`} aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                      <circle cx="12" cy="12" r="8" />
+                    </svg>
+                    {isFetchingLocation ? 'Fetching location...' : 'Use current location'}
+                  </button>
+                </div>
+                <textarea id="currentLocation" name="currentLocation" value={formData.currentLocation} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Patient's current location" rows={3} />
+                {locationMessage && (
+                  <p className={`mt-2 text-xs font-medium ${locationMessage.includes('successfully') || locationMessage.startsWith('GPS') ? 'text-emerald-600' : 'text-amber-700'}`} role="status">
+                    {locationMessage}
+                  </p>
+                )}
+              </div>
             </div>
 
             <DocumentUpload
@@ -689,7 +792,7 @@ export const UserForm = () => {
             <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
               <div>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-slate-950">My Leads</h2>
+                  <h2 className="text-xl font-bold text-slate-950">{selectedDoctorId ? `Dr. ${selectedDoctorName || 'Doctor'}'s Patients` : user?.isPro ? 'My & Doctor Patients' : 'My Leads'}</h2>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-semibold text-green-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
                     Live
@@ -712,19 +815,19 @@ export const UserForm = () => {
             {/* Lead Stats */}
             <div className="grid grid-cols-4 gap-4 px-6 py-4 border-b border-slate-100">
               <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-center">
-                <p className="text-2xl font-bold text-blue-700">{myLeads.length}</p>
+                <p className="text-2xl font-bold text-blue-700">{displayedLeads.length}</p>
                 <p className="text-xs font-medium text-blue-600">Total</p>
               </div>
               <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3 text-center">
-                <p className="text-2xl font-bold text-yellow-700">{leadStatusCounts.Pending}</p>
+                <p className="text-2xl font-bold text-yellow-700">{displayedLeadCounts.Pending}</p>
                 <p className="text-xs font-medium text-yellow-600">Pending</p>
               </div>
               <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-center">
-                <p className="text-2xl font-bold text-green-700">{leadStatusCounts.Approved}</p>
+                <p className="text-2xl font-bold text-green-700">{displayedLeadCounts.Approved}</p>
                 <p className="text-xs font-medium text-green-600">Approved</p>
               </div>
               <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-center">
-                <p className="text-2xl font-bold text-red-700">{leadStatusCounts.Rejected}</p>
+                <p className="text-2xl font-bold text-red-700">{displayedLeadCounts.Rejected}</p>
                 <p className="text-xs font-medium text-red-600">Rejected</p>
               </div>
             </div>
@@ -745,11 +848,16 @@ export const UserForm = () => {
                 </button>
               </div>
 
-              {isLoadingLeads ? (
+              {leadsError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-8 text-center text-red-700">
+                  <p className="font-semibold">{leadsError}</p>
+                  <button type="button" onClick={() => void loadMyLeads()} className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white">Retry</button>
+                </div>
+              ) : isLoadingLeads ? (
                 <div className="py-12 text-center text-slate-500">
                   <p>Loading your leads...</p>
                 </div>
-              ) : myLeads.length === 0 ? (
+              ) : displayedLeads.length === 0 ? (
                 <div className="py-12 text-center text-slate-500">
                   <p className="text-lg font-medium">No leads yet</p>
                   <p className="text-sm mt-1">Submit a patient form to start tracking your leads.</p>
@@ -762,19 +870,19 @@ export const UserForm = () => {
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Patient Name</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Gender</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Age</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Reference</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Submitted By</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Files</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Submitted</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {myLeads.map((lead) => (
+                      {displayedLeads.map((lead) => (
                         <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{lead.fullName}</td>
+                          <td className="min-w-48 px-4 py-3 text-sm text-slate-900"><span className="font-semibold">{lead.fullName}</span><span className="mt-1 block text-xs text-slate-500">Father: {lead.fatherName || 'Not provided'}</span><span className="block text-xs text-slate-500">Contact: {lead.contactNumber || 'Not provided'}</span><span className="block max-w-64 whitespace-normal text-xs text-slate-500">Location: {lead.currentLocation || lead.address}</span></td>
                           <td className="px-4 py-3 text-sm text-slate-700">{lead.gender}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{lead.age}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700 max-w-xs truncate">{lead.reference}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700"><span className="font-medium">{lead.submittedByName}</span><span className="block text-xs capitalize text-slate-400">{lead.submittedByRole}</span></td>
                           <td className="px-4 py-3 text-sm text-slate-700">{lead.documents.length}</td>
                           <td className="px-4 py-3 text-sm text-slate-500">
                             {new Date(lead.submittedAt).toLocaleString()}
@@ -785,6 +893,10 @@ export const UserForm = () => {
                             </span>
                             {lead.rejectionReason && <div className="mt-2 max-w-xs rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs leading-5 text-red-800"><strong className="block">Admin message</strong>{lead.rejectionReason}</div>}
                             {lead.status === 'Pending' && lead.statusHistory.length > 0 && <div className="mt-2 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800"><strong className="block">Reopened for review</strong>{lead.statusHistory[0].reason || 'The admin has reopened this lead.'}</div>}
+                            <div className="mt-2 text-xs text-slate-500"><strong>Treatment:</strong> {lead.treatmentStatus}<br/><strong>Payment:</strong> {lead.paymentStatus}</div>
+                            {user?.isDoctor && <PaymentMethodSelector submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
+                            {user?.isPro && <LeadDecisionControls submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
+                            {user?.isPro && <CareManagement submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
                           </td>
                         </tr>
                       ))}

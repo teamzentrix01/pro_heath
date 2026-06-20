@@ -22,9 +22,22 @@ if (!dbUrl) {
   process.exit(1);
 }
 
+const normalizeDatabaseUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete('sslmode');
+    parsed.searchParams.delete('sslcert');
+    parsed.searchParams.delete('sslkey');
+    parsed.searchParams.delete('sslrootcert');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
 console.log('Connecting to database...');
 const pool = new Pool({
-  connectionString: dbUrl,
+  connectionString: normalizeDatabaseUrl(dbUrl),
   ssl: {
     rejectUnauthorized: false
   }
@@ -44,7 +57,7 @@ const pool = new Pool({
     console.log('Updated rows:', updateResult.rowCount);
 
     console.log('Adding new role check constraint...');
-    await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro'))");
+    await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro', 'doctor'))");
 
     console.log('Applying the current application schema...');
     const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf8');

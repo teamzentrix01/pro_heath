@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const submissions = await listSubmissionsByUserId(user.id);
+    const submissions = await listSubmissionsByUserId(user.id, user.role);
 
     return NextResponse.json({ submissions });
   } catch (error) {

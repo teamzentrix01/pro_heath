@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { cookies } from 'next/headers';
-import { pool } from '@/lib/db';
+import { dbQuery } from '@/lib/db';
 import { UserRole } from '@/types/users';
 
 export const SESSION_COOKIE_NAME = 'health_track_session';
@@ -13,7 +13,7 @@ export const getAuthenticatedUser = async () => {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const result = await pool.query<{
+  const result = await dbQuery<{
     id: string;
     email: string;
     role: UserRole;

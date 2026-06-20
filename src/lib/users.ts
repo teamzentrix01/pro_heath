@@ -1,4 +1,4 @@
-import { pool } from '@/lib/db';
+import { dbQuery, getDbClient } from '@/lib/db';
 import { randomBytes } from 'crypto';
 import { hashSessionToken, SESSION_DURATION_SECONDS } from '@/lib/auth';
 import { AppUser, UserRole } from '@/types/users';
@@ -9,6 +9,8 @@ type UserRow = {
   full_name: string | null;
   phone_number: string | null;
   role: UserRole;
+  created_by_user_id: string | null;
+  is_active: boolean;
   login_count: number;
   submission_count: number;
   last_login_at: Date | null;
@@ -22,6 +24,8 @@ const mapUser = (row: UserRow): AppUser => ({
   fullName: row.full_name ?? '',
   phoneNumber: row.phone_number ?? '',
   role: row.role,
+  createdByUserId: row.created_by_user_id,
+  isActive: row.is_active,
   loginCount: row.login_count,
   submissionCount: row.submission_count,
   lastLoginAt: row.last_login_at?.toISOString() ?? null,
@@ -35,6 +39,8 @@ const userColumns = `
   full_name,
   phone_number,
   role,
+  created_by_user_id,
+  is_active,
   login_count,
   (
     SELECT COUNT(*)::int
@@ -51,8 +57,10 @@ export const createUser = async (input: {
   password: string;
   fullName: string;
   phoneNumber: string;
+  role?: 'pro' | 'doctor';
+  createdByUserId?: string | null;
 }) => {
-  const result = await pool.query<UserRow>(
+  const result = await dbQuery<UserRow>(
     `INSERT INTO app_users (
        login_id,
        email,
@@ -60,11 +68,12 @@ export const createUser = async (input: {
        full_name,
        phone_number,
        role,
-       admin_created
+       admin_created,
+       created_by_user_id
      )
-     VALUES (LOWER($1), LOWER($1), crypt($2, gen_salt('bf')), $3, $4, 'pro', TRUE)
+     VALUES (LOWER($1), LOWER($1), crypt($2, gen_salt('bf')), $3, $4, $5, TRUE, $6)
      RETURNING ${userColumns}`,
-    [input.email, input.password, input.fullName, input.phoneNumber]
+    [input.email, input.password, input.fullName, input.phoneNumber, input.role ?? 'pro', input.createdByUserId ?? null]
   );
 
   return mapUser(result.rows[0]);
@@ -76,7 +85,7 @@ export const authenticateUser = async (input: {
   ipAddress: string | null;
   userAgent: string | null;
 }) => {
-  const client = await pool.connect();
+  const client = await getDbClient();
   const sessionToken = randomBytes(32).toString('hex');
 
   try {
@@ -92,6 +101,7 @@ export const authenticateUser = async (input: {
          updated_at = NOW()
        WHERE LOWER(email) = LOWER($1)
          AND admin_created = TRUE
+         AND is_active = TRUE
          AND password_hash = crypt($2, password_hash)
        RETURNING ${userColumns}`,
       [input.email, input.password, input.ipAddress, input.userAgent]
@@ -125,7 +135,7 @@ export const authenticateUser = async (input: {
 };
 
 export const listUsers = async () => {
-  const result = await pool.query<UserRow>(
+  const result = await dbQuery<UserRow>(
     `SELECT ${userColumns}
      FROM app_users
      WHERE email IS NOT NULL
@@ -136,8 +146,21 @@ export const listUsers = async () => {
   return result.rows.map(mapUser);
 };
 
+export const listDoctors = async (proId?: string) => {
+  const result = await dbQuery<UserRow>(
+    `SELECT ${userColumns}
+     FROM app_users
+     WHERE role = 'doctor'
+       AND admin_created = TRUE
+       AND ($1::uuid IS NULL OR created_by_user_id = $1)
+     ORDER BY created_at DESC`,
+    [proId ?? null]
+  );
+  return result.rows.map(mapUser);
+};
+
 export const getUserById = async (id: string) => {
-  const result = await pool.query<UserRow>(
+  const result = await dbQuery<UserRow>(
     `SELECT ${userColumns}
      FROM app_users
      WHERE id = $1
@@ -152,7 +175,7 @@ export const updateUserProfile = async (
   id: string,
   input: { fullName: string; phoneNumber: string; currentPassword?: string; newPassword?: string }
 ) => {
-  const result = await pool.query<UserRow>(
+  const result = await dbQuery<UserRow>(
     `UPDATE app_users
      SET
        full_name = $2,

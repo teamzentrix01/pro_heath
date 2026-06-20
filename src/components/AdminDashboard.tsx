@@ -5,13 +5,13 @@ import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
-  ReferenceAnalyticsRow,
   SubmissionStatus,
   UserAnalyticsRow,
   UserSubmission,
 } from '@/types/submissions';
 import { AppUser } from '@/types/users';
 import { apiFetch, apiUrl } from '@/lib/api';
+import { CareManagement } from './CareManagement';
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -77,7 +77,6 @@ export const AdminDashboard = () => {
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [analyticsDate, setAnalyticsDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [calendarDate, setCalendarDate] = useState(() => new Date());
-  const [analyticsRows, setAnalyticsRows] = useState<ReferenceAnalyticsRow[]>([]);
   const [userAnalyticsRows, setUserAnalyticsRows] = useState<UserAnalyticsRow[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<AppUser[]>([]);
   const [userSummary, setUserSummary] = useState({
@@ -167,7 +166,7 @@ export const AdminDashboard = () => {
       setRegisteredUsers(data.users);
       setUserSummary(data.summary);
     } catch {
-      setDashboardError('Unable to load registered PROs from the database.');
+      setDashboardError('Unable to load team accounts from the database.');
     }
   }, []);
 
@@ -178,29 +177,6 @@ export const AdminDashboard = () => {
 
     return () => window.clearTimeout(timer);
   }, [loadUsers]);
-
-  useEffect(() => {
-    const loadAnalytics = async () => {
-      try {
-        const params = new URLSearchParams({
-          period: analyticsPeriod,
-          date: analyticsDate,
-        });
-        const response = await apiFetch(`/api/analytics/reference?${params.toString()}`);
-
-        if (!response.ok) {
-          throw new Error('Unable to load analytics');
-        }
-
-        const data = await response.json();
-        setAnalyticsRows(data.rows);
-      } catch {
-        setAnalyticsRows([]);
-      }
-    };
-
-    void loadAnalytics();
-  }, [analyticsDate, analyticsPeriod]);
 
   useEffect(() => {
     const loadUserAnalytics = async () => {
@@ -298,7 +274,9 @@ export const AdminDashboard = () => {
         submission.gender,
         submission.age,
         submission.contactNumber ?? '',
-        submission.reference,
+        submission.fatherName,
+        submission.address,
+        submission.currentLocation,
         submission.status,
         submittedDate,
         documentText,
@@ -332,6 +310,8 @@ export const AdminDashboard = () => {
   );
 
   const totalDocuments = submissions.reduce((sum, submission) => sum + submission.documents.length, 0);
+  const totalReferralAmount = submissions.reduce((sum, submission) => sum + (submission.referralAmount ?? 0), 0);
+  const paidReferralAmount = submissions.filter((submission) => submission.paymentStatus === 'Paid').reduce((sum, submission) => sum + (submission.referralAmount ?? 0), 0);
   const unreadCount = submissions.filter((submission) => !submission.adminSeenAt).length;
   const calendarTitle = calendarDate.toLocaleString(undefined, {
     month: 'long',
@@ -509,6 +489,8 @@ export const AdminDashboard = () => {
             <p className="text-gray-600 text-sm font-medium">Files Uploaded</p>
             <p className="text-4xl font-bold text-purple-600 mt-2">{totalDocuments}</p>
           </div>
+          <div className="bg-white rounded-lg shadow p-5"><p className="text-gray-600 text-sm font-medium">Referral Liability</p><p className="mt-2 text-3xl font-bold text-indigo-600">₹{totalReferralAmount.toLocaleString('en-IN')}</p></div>
+          <div className="bg-white rounded-lg shadow p-5"><p className="text-gray-600 text-sm font-medium">Referral Paid</p><p className="mt-2 text-3xl font-bold text-emerald-600">₹{paidReferralAmount.toLocaleString('en-IN')}</p></div>
         </section>
 
         <section id="pros" className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -677,7 +659,7 @@ export const AdminDashboard = () => {
 
         <section className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Registered PROs</h2>
+            <h2 className="text-xl font-bold text-gray-900">PRO & Doctor Accounts</h2>
             <p className="text-sm text-gray-600 mt-1">
               {userSummary.registeredUsers} registered, {userSummary.usersWhoLoggedIn} logged in,
               {' '}{userSummary.totalLogins} total login events
@@ -686,7 +668,7 @@ export const AdminDashboard = () => {
 
           {registeredUsers.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              <p>No registered PROs found.</p>
+              <p>No team accounts found.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -741,7 +723,7 @@ export const AdminDashboard = () => {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Filters</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Search by date, name, contact, reference, status, document name, or any saved lead detail.
+                Search by date, patient, doctor, PRO, location, status, or document name.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -779,7 +761,7 @@ export const AdminDashboard = () => {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="Name, reference, contact, document..."
+                placeholder="Patient, doctor, location, document..."
               />
             </div>
             <div>
@@ -844,71 +826,10 @@ export const AdminDashboard = () => {
         </section>
 
         <section id="analytics" className="bg-white rounded-lg shadow p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Reference Analytics</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Track how many leads came through each reference or source.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="analyticsPeriod" className="block text-sm font-medium text-gray-700 mb-2">
-                  Period
-                </label>
-                <select
-                  id="analyticsPeriod"
-                  value={analyticsPeriod}
-                  onChange={(event) => setAnalyticsPeriod(event.target.value as 'weekly' | 'monthly')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="analyticsDate" className="block text-sm font-medium text-gray-700 mb-2">
-                  Date
-                </label>
-                <input
-                  id="analyticsDate"
-                  type="date"
-                  value={analyticsDate}
-                  onChange={(event) => setAnalyticsDate(event.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 overflow-x-auto">
-            {analyticsRows.length === 0 ? (
-              <p className="text-gray-500 text-sm">No leads found for this selected period.</p>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Reference / Source</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total Leads</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analyticsRows.map((row) => (
-                    <tr key={row.source} className="border-b border-gray-100">
-                      <td className="px-4 py-3 text-sm text-gray-900">{row.source}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
-
-        <section className="bg-white rounded-lg shadow p-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">PRO Lead Analytics</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Leads referred by each PRO for the selected analytics period.
+              Patients submitted directly or through doctors linked to each PRO.
             </p>
           </div>
           <div className="mt-5 overflow-x-auto">
@@ -985,7 +906,7 @@ export const AdminDashboard = () => {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Patient Name</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted By (PRO)</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Contact</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Reference</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Doctor / PRO</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Files</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Submitted</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
@@ -1007,9 +928,7 @@ export const AdminDashboard = () => {
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.contactNumber || 'Not provided'}
                           </td>
-                          <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-900">
-                            {submission.reference}
-                          </td>
+                          <td className="max-w-xs px-4 py-3 text-sm text-gray-900"><span className="font-medium">{submission.submittedByName}</span><span className="block text-xs capitalize text-slate-400">{submission.submittedByRole}{submission.parentProName && submission.submittedByRole === 'doctor' ? ` · ${submission.parentProName}` : ''}</span></td>
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {submission.documents.length} file(s)
                           </td>
@@ -1095,12 +1014,9 @@ export const AdminDashboard = () => {
                                         {submission.contactNumber || 'Not provided'}
                                       </dd>
                                     </div>
-                                    <div className="sm:col-span-2">
-                                      <dt className="text-gray-500">Reference / Source</dt>
-                                      <dd className="text-gray-900 font-medium whitespace-pre-wrap">
-                                        {submission.reference}
-                                      </dd>
-                                    </div>
+                                    <div><dt className="text-gray-500">Father&apos;s Name</dt><dd className="font-medium text-gray-900">{submission.fatherName}</dd></div>
+                                    <div className="sm:col-span-2"><dt className="text-gray-500">Permanent Address</dt><dd className="whitespace-pre-wrap font-medium text-gray-900">{submission.address}</dd></div>
+                                    <div className="sm:col-span-2"><dt className="text-gray-500">Current Location</dt><dd className="whitespace-pre-wrap font-medium text-gray-900">{submission.currentLocation}</dd></div>
                                     <div className="sm:col-span-2">
                                       <dt className="text-gray-500">Submitted At</dt>
                                       <dd className="text-gray-900 font-medium">
@@ -1116,6 +1032,7 @@ export const AdminDashboard = () => {
                                         </div>)}
                                       </dd>
                                     </div>}
+                                    <div className="sm:col-span-2"><CareManagement submission={submission} onUpdated={(updated) => setSubmissions(current => current.map(item => item.id === updated.id ? updated : item))} /></div>
                                   </dl>
                                 </div>
 

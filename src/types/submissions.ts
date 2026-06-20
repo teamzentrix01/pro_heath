@@ -1,4 +1,7 @@
 export type SubmissionStatus = 'Pending' | 'Approved' | 'Rejected';
+export type TreatmentStatus = 'Not Started' | 'Admitted' | 'Medicine Taken & Patient Left' | 'Discharged';
+export type PaymentMethod = 'UPI' | 'Cash' | 'Bank Transfer';
+export type PaymentStatus = 'Not Applicable' | 'Awaiting Method' | 'Payment Pending' | 'Processing' | 'Paid' | 'Payment Failed' | 'On Hold';
 
 export interface SubmissionStatusEvent {
   id: string;
@@ -22,12 +25,24 @@ export interface UserSubmission {
   userId: string | null;
   submittedByEmail: string;
   submittedByName: string;
+  submittedByRole: 'pro' | 'doctor' | 'admin';
+  parentProId: string | null;
+  parentProName: string;
   fullName: string;
+  fatherName: string;
   gender: string;
   age: number;
   contactNumber: string | null;
-  reference: string;
+  address: string;
+  currentLocation: string;
   status: SubmissionStatus;
+  treatmentStatus: TreatmentStatus;
+  referralAmount: number | null;
+  paymentMethod: PaymentMethod | null;
+  paymentDetails: Record<string, string>;
+  paymentStatus: PaymentStatus;
+  transactionReference: string | null;
+  paidAt: string | null;
   rejectionReason: string | null;
   adminSeenAt: string | null;
   statusUpdatedAt: string | null;
@@ -36,10 +51,6 @@ export interface UserSubmission {
   submittedAt: string;
 }
 
-export interface ReferenceAnalyticsRow {
-  source: string;
-  count: number;
-}
 
 export interface UserAnalyticsRow {
   userId: string | null;

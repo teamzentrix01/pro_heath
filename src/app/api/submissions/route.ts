@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const authenticatedUser = await getAuthenticatedUser();
-    if (!authenticatedUser || authenticatedUser.role !== 'pro') {
-      return NextResponse.json({ error: 'A PRO login is required.' }, { status: 401 });
+    if (!authenticatedUser || !['pro', 'doctor'].includes(authenticatedUser.role)) {
+      return NextResponse.json({ error: 'A PRO or doctor login is required.' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (
       !body.fullName?.trim() ||
+      !body.fatherName?.trim() ||
       !allowedGenders.includes(body.gender) ||
       !Number.isInteger(age) ||
       age < 1 ||
@@ -60,7 +61,8 @@ export async function POST(request: NextRequest) {
         body.contactNumber?.trim() &&
         !/^\d{10}$/.test(body.contactNumber.trim())
       ) ||
-      !body.reference?.trim()
+      !body.address?.trim() ||
+      !body.currentLocation?.trim()
     ) {
       return NextResponse.json({ error: 'Missing or invalid form fields' }, { status: 400 });
     }
@@ -94,10 +96,12 @@ export async function POST(request: NextRequest) {
     const submission = await createSubmission({
       userId: authenticatedUser.id,
       fullName: body.fullName.trim(),
+      fatherName: body.fatherName.trim(),
       gender: body.gender,
       age,
       contactNumber: body.contactNumber?.trim() || null,
-      reference: body.reference.trim(),
+      address: body.address.trim(),
+      currentLocation: body.currentLocation.trim(),
       documents,
     });
 

@@ -20,27 +20,45 @@ export async function GET() {
 
     const headers = [
       'Patient Name',
+      "Father's Name",
       'Gender',
       'Age',
       'Contact Number',
-      'Reference / Source',
-      'Status',
+      'Permanent Address',
+      'Current Location',
+      'Approval Status',
+      'Treatment Status',
       'Submitted Date',
+      'Submitted By',
+      'Submitter Role',
       'PRO Name',
-      'PRO Email',
+      'Referral Amount',
+      'Payment Method',
+      'Payment Status',
+      'Transaction Reference',
+      'Paid Date',
       'Files Count',
     ];
 
     const rows = submissions.map((s) => [
       escapeCSV(s.fullName),
+      escapeCSV(s.fatherName),
       escapeCSV(s.gender),
       String(s.age),
       escapeCSV(s.contactNumber || 'Not provided'),
-      escapeCSV(s.reference),
+      escapeCSV(s.address),
+      escapeCSV(s.currentLocation),
       escapeCSV(s.status),
+      escapeCSV(s.treatmentStatus),
       escapeCSV(new Date(s.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })),
       escapeCSV(s.submittedByName || 'Unknown'),
-      escapeCSV(s.submittedByEmail),
+      escapeCSV(s.submittedByRole),
+      escapeCSV(s.parentProName || (s.submittedByRole === 'pro' ? s.submittedByName : 'Unknown')),
+      s.referralAmount?.toFixed(2) ?? '',
+      escapeCSV(s.paymentMethod ?? ''),
+      escapeCSV(s.paymentStatus),
+      escapeCSV(s.transactionReference ?? ''),
+      escapeCSV(s.paidAt ? new Date(s.paidAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''),
       String(s.documents.length),
     ]);
 
@@ -54,7 +72,7 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="PRO_HealthTrack_All_Leads_${now}.csv"`,
+        'Content-Disposition': `attachment; filename="PRO_HealthTrack_Operations_Payments_${now}.csv"`,
       },
     });
   } catch (error) {

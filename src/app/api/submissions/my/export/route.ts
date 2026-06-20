@@ -16,26 +16,40 @@ export async function GET() {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const submissions = await listSubmissionsByUserId(user.id);
+    const submissions = await listSubmissionsByUserId(user.id, user.role);
 
     const headers = [
       'Patient Name',
+      "Father's Name",
       'Gender',
       'Age',
       'Contact Number',
-      'Reference / Source',
-      'Status',
+      'Address',
+      'Current Location',
+      'Approval Status',
+      'Treatment Status',
+      'Doctor / PRO',
+      'Referral Amount',
+      'Payment Method',
+      'Payment Status',
       'Submitted Date',
       'Files Count',
     ];
 
     const rows = submissions.map((s) => [
       escapeCSV(s.fullName),
+      escapeCSV(s.fatherName),
       escapeCSV(s.gender),
       String(s.age),
       escapeCSV(s.contactNumber || 'Not provided'),
-      escapeCSV(s.reference),
+      escapeCSV(s.address),
+      escapeCSV(s.currentLocation),
       escapeCSV(s.status),
+      escapeCSV(s.treatmentStatus),
+      escapeCSV(s.submittedByName),
+      s.referralAmount?.toFixed(2) ?? '',
+      escapeCSV(s.paymentMethod ?? ''),
+      escapeCSV(s.paymentStatus),
       escapeCSV(new Date(s.submittedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })),
       String(s.documents.length),
     ]);
