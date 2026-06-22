@@ -16,8 +16,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const treatmentStatus = body.treatmentStatus as TreatmentStatus;
   const referralAmount = body.referralAmount === '' || body.referralAmount == null ? null : Number(body.referralAmount);
   const paymentStatus = body.paymentStatus ? body.paymentStatus as PaymentStatus : undefined;
+  const transactionReference = String(body.transactionReference ?? '').trim();
   if (!treatments.includes(treatmentStatus) || (referralAmount !== null && (!Number.isFinite(referralAmount) || referralAmount < 0)) || (paymentStatus && !paymentStatuses.includes(paymentStatus))) {
     return NextResponse.json({ error: 'Invalid treatment or payment information.' }, { status: 400 });
+  }
+  if (paymentStatus === 'Paid' && transactionReference.length < 3) {
+    return NextResponse.json({ error: 'Enter the payment transaction or receipt reference.' }, { status: 400 });
   }
   const submission = await updateSubmissionCare({
     id,
@@ -25,7 +29,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     treatmentStatus,
     referralAmount,
     paymentStatus,
-    transactionReference: String(body.transactionReference ?? '').trim() || null,
+    transactionReference: transactionReference || null,
     note: String(body.note ?? '').trim() || null,
   });
   return submission ? NextResponse.json({ submission }) : NextResponse.json({ error: 'Accept the lead before updating patient care.' }, { status: 409 });

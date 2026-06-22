@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from '@/lib/auth';
 import { SubmissionStatus } from '@/types/submissions';
 import { NextRequest, NextResponse } from 'next/server';
 
-const allowedStatuses: SubmissionStatus[] = ['Pending', 'Approved', 'Rejected'];
+const allowedStatuses: SubmissionStatus[] = ['Approved', 'Rejected'];
 
 export async function PATCH(
   request: NextRequest,
@@ -35,13 +35,6 @@ export async function PATCH(
       );
     }
 
-    if (status === 'Pending' && reason.length < 5) {
-      return NextResponse.json(
-        { error: 'Please provide a reason for reopening this lead.' },
-        { status: 400 }
-      );
-    }
-
     const result = await updateSubmissionStatus(id, status, reviewer.id, reason || null);
 
     if (!result) {
@@ -50,7 +43,7 @@ export async function PATCH(
 
     if ('conflict' in result) {
       return NextResponse.json(
-        { error: `This lead is already ${result.currentStatus}. Reopen it before making another decision.` },
+        { error: `This lead already has a final ${result.currentStatus} decision.` },
         { status: 409 }
       );
     }

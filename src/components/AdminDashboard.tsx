@@ -856,7 +856,7 @@ export const AdminDashboard = () => {
                           </td>
 
                           {/* 7. Treatment & Referral */}
-                          <td className="px-4 py-3">
+                          <td className="overflow-hidden px-4 py-3">
                             {status === 'Approved' ? (
                               <CareManagement
                                 submission={submission}
@@ -875,7 +875,7 @@ export const AdminDashboard = () => {
                           {/* 8. Actions */}
                           <td className="px-4 py-3">
                             <div className="flex min-w-[9rem] flex-col gap-2 xl:flex-row">
-                              {status === 'Pending' ? <select
+                              {status === 'Pending' && <select
                                 aria-label={`Decide status for ${submission.fullName}`}
                                 value=""
                                 onChange={(event) => {
@@ -890,7 +890,7 @@ export const AdminDashboard = () => {
                                 <option value="">Decision…</option>
                                 <option value="Approved">Approve</option>
                                 <option value="Rejected">Reject</option>
-                              </select> : <button type="button" onClick={() => { setStatusReason(''); setStatusAction({ submission, status: 'Pending' }); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100">Reopen</button>}
+                              </select>}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1037,20 +1037,20 @@ export const AdminDashboard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusAction.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : statusAction.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-              {statusAction.status === 'Pending' ? 'Reopen lead' : `${statusAction.status} lead`}
+              {`${statusAction.status} lead`}
             </span>
             <h2 className="mt-4 text-xl font-bold text-slate-950">{statusAction.submission.fullName}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {statusAction.status === 'Approved' ? 'Confirm that this lead is ready to be approved. It will lock after approval.' : statusAction.status === 'Rejected' ? 'Explain clearly why this lead is being rejected. This message will be visible to the PRO.' : 'Explain why this completed decision needs another review.'}
+              {statusAction.status === 'Approved' ? 'Confirm that this lead is ready to be approved. The decision cannot be reopened.' : 'Explain clearly why this lead is being rejected. This message will be visible to the PRO and doctor.'}
             </p>
-            {statusAction.status !== 'Approved' && <div className="mt-5">
+            {statusAction.status === 'Rejected' && <div className="mt-5">
               <label htmlFor="statusReason" className="mb-2 block text-sm font-bold text-slate-700">Reason <span className="text-red-500">*</span></label>
-              <textarea id="statusReason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={4} maxLength={500} placeholder={statusAction.status === 'Rejected' ? 'Example: Required medical document is missing…' : 'Why is this lead being reopened?'} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+              <textarea id="statusReason" value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={4} maxLength={500} placeholder="Example: Required medical document is missing…" className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
               <p className="mt-1 text-right text-xs text-slate-400">{statusReason.length}/500</p>
             </div>}
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => { setStatusAction(null); setStatusReason(''); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Cancel</button>
-              <button type="button" disabled={isUpdatingStatus || (statusAction.status !== 'Approved' && statusReason.trim().length < 5)} onClick={() => void updateStatus(statusAction.submission.id, statusAction.status, statusReason.trim())} className={`rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 ${statusAction.status === 'Rejected' ? 'bg-red-600 hover:bg-red-700' : statusAction.status === 'Approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}>{isUpdatingStatus ? 'Updating…' : 'Confirm update'}</button>
+              <button type="button" disabled={isUpdatingStatus || (statusAction.status === 'Rejected' && statusReason.trim().length < 5)} onClick={() => void updateStatus(statusAction.submission.id, statusAction.status, statusReason.trim())} className={`rounded-xl px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 ${statusAction.status === 'Rejected' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>{isUpdatingStatus ? 'Updating…' : 'Confirm update'}</button>
             </div>
           </section>
         </div>

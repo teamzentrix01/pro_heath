@@ -356,9 +356,8 @@ export const updateSubmissionStatus = async (
     }
 
     const previousStatus = current.rows[0].status;
-    const isReopen = status === 'Pending' && previousStatus !== 'Pending';
     const isInitialDecision = previousStatus === 'Pending' && status !== 'Pending';
-    if (!isReopen && !isInitialDecision) {
+    if (!isInitialDecision) {
       await client.query('ROLLBACK');
       return { conflict: true as const, currentStatus: previousStatus };
     }
@@ -370,7 +369,7 @@ export const updateSubmissionStatus = async (
        UPDATE form_submissions
        SET status = input.next_status,
            rejection_reason = CASE WHEN input.next_status = 'Rejected' THEN input.reason ELSE NULL END,
-           reviewed_at = CASE WHEN input.next_status = 'Pending' THEN NULL ELSE NOW() END,
+           reviewed_at = NOW(),
            status_updated_at = NOW(),
            admin_seen_at = COALESCE(admin_seen_at, NOW()),
            updated_at = NOW()

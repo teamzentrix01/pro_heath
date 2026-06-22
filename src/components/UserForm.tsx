@@ -872,6 +872,7 @@ export const UserForm = () => {
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Files</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Submitted</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Treatment & Referral</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -890,8 +891,13 @@ export const UserForm = () => {
                               {lead.status}
                             </span>
                             {lead.rejectionReason && <div className="mt-2 max-w-xs rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs leading-5 text-red-800"><strong className="block">Admin message</strong>{lead.rejectionReason}</div>}
-                            {lead.status === 'Pending' && lead.statusHistory.length > 0 && <div className="mt-2 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800"><strong className="block">Reopened for review</strong>{lead.statusHistory[0].reason || 'The admin has reopened this lead.'}</div>}
-                            <div className="mt-2 text-xs text-slate-500"><strong>Treatment:</strong> {lead.treatmentStatus}<br/><strong>Payment:</strong> {lead.paymentStatus}</div>
+                          </td>
+                          <td className="min-w-52 px-4 py-3 text-xs text-slate-600">
+                            <strong className="block text-slate-800">{lead.treatmentStatus}</strong>
+                            {lead.treatmentStatus === 'Discharged' && lead.referralAmount !== null && (
+                              <span className="mt-1 block font-semibold text-emerald-700">Amount: ₹{lead.referralAmount.toLocaleString('en-IN')}</span>
+                            )}
+                            <span className="mt-1 block">Payment: {lead.paymentStatus}</span>
                             {user?.isDoctor && <PaymentMethodSelector submission={lead} onUpdated={(updated) => setMyLeads(current => current.map(item => item.id === updated.id ? updated : item))} />}
                           </td>
                         </tr>
