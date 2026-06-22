@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { AppUser } from '@/types/users';
+import { PasswordDialog } from './PasswordDialog';
 
 export const DoctorManagement = ({ onViewPatients }: { onViewPatients?: (doctorId: string) => void }) => {
   const [doctors, setDoctors] = useState<AppUser[]>([]);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [formResetKey, setFormResetKey] = useState(0);
+  const [passwordTarget, setPasswordTarget] = useState<AppUser | null>(null);
   const [form, setForm] = useState({ fullName: '', email: '', phoneNumber: '', password: '' });
   const load = useCallback(async () => {
     const response = await apiFetch('/api/doctors');
@@ -40,6 +42,7 @@ export const DoctorManagement = ({ onViewPatients }: { onViewPatients?: (doctorI
       <input required autoComplete="off" name={`doctor-phone-${formResetKey}`} inputMode="numeric" maxLength={10} value={form.phoneNumber} onChange={e => setForm(v => ({ ...v, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="10-digit phone" className="rounded-xl border border-slate-300 px-4 py-3 text-sm" />
       <div className="flex gap-2"><input required autoComplete="new-password" name={`doctor-password-${formResetKey}`} type="password" minLength={8} value={form.password} onChange={e => setForm(v => ({ ...v, password: e.target.value }))} placeholder="Temporary password" className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm" /><button disabled={saving} className="rounded-xl bg-blue-600 px-4 text-sm font-bold text-white disabled:opacity-50">{saving ? '…' : 'Add'}</button></div>
     </form>
-    {doctors.length > 0 && <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{doctors.map(doctor => <div key={doctor.id} className="rounded-xl border border-slate-200 bg-white p-3"><strong className="block text-sm text-slate-900">Dr. {doctor.fullName}</strong><span className="block truncate text-xs text-slate-500">{doctor.email}</span><div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-blue-600">{doctor.submissionCount} patients</span>{doctor.submissionCount > 0 && onViewPatients && <button type="button" onClick={() => onViewPatients(doctor.id)} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100">View patients</button>}</div></div>)}</div>}
+    {doctors.length > 0 && <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{doctors.map(doctor => <div key={doctor.id} className="rounded-xl border border-slate-200 bg-white p-3"><strong className="block text-sm text-slate-900">Dr. {doctor.fullName}</strong><span className="block truncate text-xs text-slate-500">{doctor.email}</span><div className="mt-3 flex flex-wrap items-center gap-2"><span className="mr-auto text-xs font-semibold text-blue-600">{doctor.submissionCount} patients</span>{doctor.submissionCount > 0 && onViewPatients && <button type="button" onClick={() => onViewPatients(doctor.id)} className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100">View patients</button>}<button type="button" onClick={() => setPasswordTarget(doctor)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">Reset password</button></div></div>)}</div>}
+    {passwordTarget && <PasswordDialog mode="reset" targetId={passwordTarget.id} targetName={`Dr. ${passwordTarget.fullName}`} onClose={() => setPasswordTarget(null)} />}
   </section>;
 };

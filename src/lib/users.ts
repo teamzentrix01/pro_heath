@@ -202,3 +202,38 @@ export const updateUserProfile = async (
 
   return result.rows[0] ? mapUser(result.rows[0]) : null;
 };
+
+export const changeUserPassword = async (id: string, currentPassword: string, newPassword: string) => {
+  const result = await dbQuery<{ id: string }>(
+    `UPDATE app_users
+     SET password_hash = crypt($3, gen_salt('bf')), updated_at = NOW()
+     WHERE id = $1 AND password_hash = crypt($2, password_hash)
+     RETURNING id`,
+    [id, currentPassword, newPassword]
+  );
+  return Boolean(result.rowCount);
+};
+
+export const resetUserPassword = async (id: string, newPassword: string) => {
+  const client = await getDbClient();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query<{ id: string }>(
+      `UPDATE app_users
+       SET password_hash = crypt($2, gen_salt('bf')), updated_at = NOW()
+       WHERE id = $1
+       RETURNING id`,
+      [id, newPassword]
+    );
+    if (result.rowCount) {
+      await client.query(`DELETE FROM auth_sessions WHERE user_id = $1`, [id]);
+    }
+    await client.query('COMMIT');
+    return Boolean(result.rowCount);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};

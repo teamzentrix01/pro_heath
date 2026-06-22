@@ -12,6 +12,7 @@ import {
 import { AppUser } from '@/types/users';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { CareManagement } from './CareManagement';
+import { PasswordDialog } from './PasswordDialog';
 
 const POLL_INTERVAL_MS = 15_000;
 type AdminSection = 'dashboard' | 'accounts' | 'analytics' | 'submissions';
@@ -71,7 +72,7 @@ const downloadFile = (dataUrl: string, fileName: string) => {
 };
 
 export const AdminDashboard = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
   const [submissions, setSubmissions] = useState<UserSubmission[]>([]);
@@ -96,6 +97,7 @@ export const AdminDashboard = () => {
   const [userCreationMessage, setUserCreationMessage] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [userFormResetKey, setUserFormResetKey] = useState(0);
+  const [passwordDialog, setPasswordDialog] = useState<{ mode: 'change' | 'reset'; target?: AppUser } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [statusAction, setStatusAction] = useState<{
     submission: UserSubmission;
@@ -414,6 +416,7 @@ export const AdminDashboard = () => {
               </svg>
               {unreadCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unreadCount}</span>}
             </button>
+            <button type="button" onClick={() => setPasswordDialog({ mode: 'change' })} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Change password</button>
             <button
               onClick={handleLogout}
               className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100"
@@ -579,6 +582,7 @@ export const AdminDashboard = () => {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Phone</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Security</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -592,6 +596,7 @@ export const AdminDashboard = () => {
                         {registeredUser.phoneNumber || 'Not provided'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 capitalize">{registeredUser.role === 'pro' ? 'PRO' : registeredUser.role}</td>
+                      <td className="px-6 py-4">{registeredUser.role === 'admin' ? <span className="text-xs text-slate-400">Current password required</span> : <button type="button" onClick={() => setPasswordDialog({ mode: 'reset', target: registeredUser })} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Reset password</button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1089,6 +1094,7 @@ export const AdminDashboard = () => {
           </section>
         </div>
       )}
+      {passwordDialog && <PasswordDialog mode={passwordDialog.mode} targetId={passwordDialog.target?.id} targetName={passwordDialog.target?.fullName || user?.fullName || user?.email || 'Admin'} onClose={() => setPasswordDialog(null)} />}
       {newLeadNotice > 0 && <div className="fixed bottom-5 right-5 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-lg text-white">+</span>
         <button type="button" onClick={() => { setNewLeadNotice(0); document.getElementById('submissions')?.scrollIntoView(); }} className="text-left">
