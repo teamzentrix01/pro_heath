@@ -14,6 +14,14 @@ import { apiFetch, apiUrl } from '@/lib/api';
 import { CareManagement } from './CareManagement';
 
 const POLL_INTERVAL_MS = 15_000;
+type AdminSection = 'dashboard' | 'accounts' | 'analytics' | 'submissions';
+
+const sectionTitles: Record<AdminSection, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Dashboard', subtitle: 'Operational summary and referral totals' },
+  accounts: { title: 'PRO Accounts', subtitle: 'Create and manage care network accounts' },
+  analytics: { title: 'Analytics', subtitle: 'Review lead performance by PRO' },
+  submissions: { title: 'Submitted Leads', subtitle: 'Review patients, treatment, and payments' },
+};
 
 const statusStyles: Record<SubmissionStatus, string> = {
   Pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -65,6 +73,7 @@ const downloadFile = (dataUrl: string, fileName: string) => {
 export const AdminDashboard = () => {
   const { logout } = useAuth();
   const router = useRouter();
+  const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
   const [submissions, setSubmissions] = useState<UserSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState('');
@@ -86,6 +95,7 @@ export const AdminDashboard = () => {
   });
   const [userCreationMessage, setUserCreationMessage] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [userFormResetKey, setUserFormResetKey] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [statusAction, setStatusAction] = useState<{
     submission: UserSubmission;
@@ -345,6 +355,7 @@ export const AdminDashboard = () => {
       }
 
       setNewUser({ fullName: '', email: '', phoneNumber: '', password: '' });
+      setUserFormResetKey((key) => key + 1);
       setUserCreationMessage('PRO credentials created successfully.');
       await loadUsers();
     } catch (error) {
@@ -367,10 +378,10 @@ export const AdminDashboard = () => {
           </div>
         </div>
         <nav className="side-nav">
-          <a href="#overview"><span>◫</span><b>Overview</b></a>
-          <a href="#pros"><span>♙</span><b>PRO Accounts</b></a>
-          <a href="#analytics"><span>⌁</span><b>Analytics</b></a>
-          <a href="#submissions"><span>≡</span><b>Submitted Leads</b></a>
+          <button type="button" className={activeSection === 'dashboard' ? 'active' : ''} onClick={() => setActiveSection('dashboard')}><span>◫</span><b>Dashboard</b></button>
+          <button type="button" className={activeSection === 'accounts' ? 'active' : ''} onClick={() => setActiveSection('accounts')}><span>♙</span><b>PRO Accounts</b></button>
+          <button type="button" className={activeSection === 'analytics' ? 'active' : ''} onClick={() => setActiveSection('analytics')}><span>⌁</span><b>Analytics</b></button>
+          <button type="button" className={activeSection === 'submissions' ? 'active' : ''} onClick={() => setActiveSection('submissions')}><span>≡</span><b>Submitted Leads</b></button>
         </nav>
         <div className="sidebar-footer">
           <strong className="block text-white">System status</strong>
@@ -382,18 +393,18 @@ export const AdminDashboard = () => {
         <div className="mx-auto flex max-w-[1600px] flex-row items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">Admin overview</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{sectionTitles[activeSection].title}</h1>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-semibold text-green-700">
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 Live
               </span>
             </div>
-            <p className="text-gray-600 mt-1">PRO HealthTrack — Lead Management</p>
+            <p className="text-gray-600 mt-1">{sectionTitles[activeSection].subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => document.getElementById('submissions')?.scrollIntoView()}
+              onClick={() => setActiveSection('submissions')}
               className="relative grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-lg text-slate-700 shadow-sm transition hover:bg-blue-50"
               aria-label={`${unreadCount} new leads`}
               title={unreadCount > 0 ? `${unreadCount} new lead notifications` : 'No new lead notifications'}
@@ -418,7 +429,7 @@ export const AdminDashboard = () => {
           </div>
         )}
 
-        <section id="overview" className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <section id="dashboard" className={`${activeSection === 'dashboard' ? '' : 'hidden'} metric-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5`}>
           <div className="bg-white rounded-lg shadow p-5">
             <p className="text-gray-600 text-sm font-medium">Total Leads</p>
             <p className="text-4xl font-bold text-blue-600 mt-2">{submissions.length}</p>
@@ -443,7 +454,7 @@ export const AdminDashboard = () => {
           <div className="bg-white rounded-lg shadow p-5"><p className="text-gray-600 text-sm font-medium">Referral Paid</p><p className="mt-2 text-3xl font-bold text-emerald-600">₹{paidReferralAmount.toLocaleString('en-IN')}</p></div>
         </section>
 
-        <section id="pros" className="max-w-3xl">
+        <section id="pros" className={`${activeSection === 'accounts' ? '' : 'hidden'} max-w-3xl`}>
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 bg-white px-6 py-4">
               <h2 className="text-xl font-bold text-gray-900">Create PRO Credentials</h2>
@@ -452,7 +463,7 @@ export const AdminDashboard = () => {
               </p>
             </div>
 
-            <form onSubmit={handleCreateUser} className="grid grid-cols-1 gap-5 p-6 xl:grid-cols-2">
+            <form key={userFormResetKey} onSubmit={handleCreateUser} autoComplete="off" className="grid grid-cols-1 gap-5 p-6 xl:grid-cols-2">
               {userCreationMessage && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 xl:col-span-2">
                   {userCreationMessage}
@@ -465,6 +476,8 @@ export const AdminDashboard = () => {
                 </label>
                 <input
                   id="newUserName"
+                  name={`pro-name-${userFormResetKey}`}
+                  autoComplete="off"
                   type="text"
                   value={newUser.fullName}
                   onChange={(event) =>
@@ -481,6 +494,8 @@ export const AdminDashboard = () => {
                 </label>
                 <input
                   id="newUserEmail"
+                  name={`pro-email-${userFormResetKey}`}
+                  autoComplete="off"
                   type="email"
                   value={newUser.email}
                   onChange={(event) =>
@@ -497,6 +512,8 @@ export const AdminDashboard = () => {
                 </label>
                 <input
                   id="newUserPhone"
+                  name={`pro-phone-${userFormResetKey}`}
+                  autoComplete="off"
                   type="tel"
                   inputMode="numeric"
                   maxLength={10}
@@ -518,6 +535,8 @@ export const AdminDashboard = () => {
                 </label>
                 <input
                   id="newUserPassword"
+                  name={`pro-password-${userFormResetKey}`}
+                  autoComplete="new-password"
                   type="password"
                   value={newUser.password}
                   onChange={(event) =>
@@ -541,7 +560,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="bg-white rounded-lg shadow overflow-hidden">
+        <section className={`${activeSection === 'accounts' ? '' : 'hidden'} bg-white rounded-lg shadow overflow-hidden`}>
           <div className="px-6 py-5 border-b border-gray-200">
             <h2 className="text-xl font-bold text-gray-900">PRO & Doctor Accounts</h2>
             <p className="text-sm text-gray-600 mt-1">Account directory with assigned roles.</p>
@@ -581,7 +600,7 @@ export const AdminDashboard = () => {
           )}
         </section>
 
-        <section className="bg-white rounded-lg shadow p-6">
+        <section className={`${activeSection === 'submissions' ? '' : 'hidden'} bg-white rounded-lg shadow p-6`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Filters</h2>
@@ -688,12 +707,27 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section id="analytics" className="bg-white rounded-lg shadow p-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">PRO Lead Analytics</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Patients submitted directly or through doctors linked to each PRO.
-            </p>
+        <section id="analytics" className={`${activeSection === 'analytics' ? '' : 'hidden'} bg-white rounded-lg shadow p-6`}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">PRO Lead Analytics</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Patients submitted directly or through doctors linked to each PRO.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div>
+                <label htmlFor="analyticsPeriod" className="mb-1 block text-xs font-semibold text-slate-600">Period</label>
+                <select id="analyticsPeriod" value={analyticsPeriod} onChange={(event) => setAnalyticsPeriod(event.target.value as 'weekly' | 'monthly')} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="analyticsDate" className="mb-1 block text-xs font-semibold text-slate-600">Selected date</label>
+                <input id="analyticsDate" type="date" value={analyticsDate} onChange={(event) => setAnalyticsDate(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+            </div>
           </div>
           <div className="mt-5 overflow-x-auto">
             {userAnalyticsRows.length === 0 ? (
@@ -729,7 +763,7 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section id="submissions" className="bg-white rounded-lg shadow overflow-hidden">
+        <section id="submissions" className={`${activeSection === 'submissions' ? '' : 'hidden'} bg-white rounded-lg shadow overflow-hidden`}>
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Submitted Leads</h2>

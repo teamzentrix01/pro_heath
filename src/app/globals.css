@@ -77,8 +77,8 @@ button:disabled { cursor: not-allowed; }
 .brand-mark strong { display:block; color:white; font-size:1.05rem; }
 .brand-mark small { color:#93c5fd; }
 .side-nav { display:grid; gap:.35rem; margin-top:1rem; }
-.side-nav a { display:flex; align-items:center; gap:.8rem; padding:.8rem 1rem; border-radius:.85rem; color:#cbd5e1; font-size:.9rem; font-weight:600; text-decoration:none; transition:.2s ease; }
-.side-nav a:hover, .side-nav a:first-child { color:white; background:rgba(255,255,255,.1); transform:translateX(2px); }
+.side-nav button { display:flex; width:100%; align-items:center; gap:.8rem; padding:.8rem 1rem; border:0; border-radius:.85rem; color:#cbd5e1; background:transparent; font-size:.9rem; font-weight:600; text-align:left; cursor:pointer; transition:.2s ease; }
+.side-nav button:hover, .side-nav button.active { color:white; background:rgba(255,255,255,.1); transform:translateX(2px); }
 .side-nav span { width:1.4rem; text-align:center; }
 .sidebar-footer { margin-top:auto; padding:1rem; border-radius:1rem; color:#bfdbfe; background:rgba(255,255,255,.07); font-size:.75rem; line-height:1.5; }
 
@@ -132,7 +132,7 @@ button:disabled { cursor: not-allowed; }
   .admin-sidebar .brand-mark { padding:0; }
   .admin-sidebar .brand-mark small, .admin-sidebar .sidebar-footer { display:none; }
   .side-nav { margin:0 0 0 auto; display:flex; overflow-x:auto; }
-  .side-nav a { white-space:nowrap; padding:.65rem .8rem; }
+  .side-nav button { width:auto; white-space:nowrap; padding:.65rem .8rem; }
   .admin-header, .admin-content { margin-left:0; }
   .admin-header { top:4.5rem; }
 }
@@ -142,9 +142,9 @@ button:disabled { cursor: not-allowed; }
   .admin-sidebar .brand-mark strong { font-size:.9rem; }
   .brand-icon { width:2.35rem; height:2.35rem; border-radius:.8rem; }
   .side-nav { gap:.2rem; }
-  .side-nav a { padding:.6rem; }
-  .side-nav a span { width:auto; }
-  .side-nav a b { display:none; }
+  .side-nav button { padding:.6rem; }
+  .side-nav button span { width:auto; }
+  .side-nav button b { display:none; }
   .admin-header { top:4.05rem; }
   .admin-header > div { padding-top:.85rem !important; padding-bottom:.85rem !important; }
   .admin-content { padding:1rem .75rem 5rem !important; gap:1rem !important; }

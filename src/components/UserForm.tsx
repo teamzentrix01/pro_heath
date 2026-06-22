@@ -56,6 +56,7 @@ export const UserForm = () => {
   });
 
   const [documents, setDocuments] = useState<File[]>([]);
+  const [patientFormResetKey, setPatientFormResetKey] = useState(0);
   const [documentError, setDocumentError] = useState('');
   const [uploadResetKey, setUploadResetKey] = useState(0);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
@@ -290,7 +291,9 @@ export const UserForm = () => {
       });
       setDocuments([]);
       setDocumentError('');
+      setLocationMessage('');
       setUploadResetKey((key) => key + 1);
+      setPatientFormResetKey((key) => key + 1);
 
       // Refresh leads if visible
       if (isLeadsOpen) {
@@ -515,7 +518,7 @@ export const UserForm = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-7">
+          <form key={patientFormResetKey} onSubmit={handleSubmit} autoComplete="off" className="space-y-7">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
                 <label htmlFor="fullName" className="mb-2 block text-sm font-semibold text-slate-700">
