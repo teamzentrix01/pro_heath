@@ -35,12 +35,20 @@ const normalizeDatabaseUrl = (url) => {
   }
 };
 
+const shouldUseSsl = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.get('sslmode') === 'require') return true;
+    return !['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+  } catch {
+    return true;
+  }
+};
+
 console.log('Connecting to database...');
 const pool = new Pool({
   connectionString: normalizeDatabaseUrl(dbUrl),
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: shouldUseSsl(dbUrl) ? { rejectUnauthorized: false } : false
 });
 
 (async () => {
@@ -49,19 +57,13 @@ const pool = new Pool({
     const nowResult = await pool.query('SELECT NOW()');
     console.log('Connected! Current DB time:', nowResult.rows[0].now);
 
-    console.log('Dropping role check constraint if exists...');
-    await pool.query('ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check');
-
-    console.log('Updating user roles to pro...');
-    const updateResult = await pool.query("UPDATE app_users SET role = 'pro' WHERE role = 'user'");
-    console.log('Updated rows:', updateResult.rowCount);
-
-    console.log('Adding new role check constraint...');
-    await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'pro', 'doctor'))");
-
     console.log('Applying the current application schema...');
     const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf8');
     await pool.query(schemaSql);
+
+    console.log('Ensuring legacy user roles are migrated to pro...');
+    const updateResult = await pool.query("UPDATE app_users SET role = 'pro' WHERE role = 'user'");
+    console.log('Updated rows:', updateResult.rowCount);
 
     console.log('Database migration successfully completed!');
     await pool.end();

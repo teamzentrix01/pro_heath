@@ -16,6 +16,18 @@ const normalizedConnectionString = (() => {
   }
 })();
 
+const shouldUseSsl = (() => {
+  if (!connectionString) return false;
+  try {
+    const url = new URL(connectionString);
+    const sslMode = url.searchParams.get('sslmode');
+    if (sslMode === 'require') return true;
+    return !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return true;
+  }
+})();
+
 if (!connectionString) {
   console.warn('DATABASE_URL is not set. PostgreSQL API routes will fail until it is configured.');
 }
@@ -29,9 +41,7 @@ export const pool =
   globalForPg.pgPool ??
   new Pool({
     connectionString: normalizedConnectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl: shouldUseSsl ? { rejectUnauthorized: false } : false,
     max: 10,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 10_000,
