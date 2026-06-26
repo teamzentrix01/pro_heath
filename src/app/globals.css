@@ -79,7 +79,7 @@ button:disabled { cursor: not-allowed; }
 .side-nav { display:grid; gap:.35rem; margin-top:1rem; }
 .side-nav button { display:flex; width:100%; align-items:center; gap:.8rem; padding:.8rem 1rem; border:0; border-radius:.85rem; color:#cbd5e1; background:transparent; font-size:.9rem; font-weight:600; text-align:left; cursor:pointer; transition:.2s ease; }
 .side-nav button:hover, .side-nav button.active { color:white; background:rgba(255,255,255,.1); transform:translateX(2px); }
-.side-nav span { width:1.4rem; text-align:center; }
+.side-nav span { width:1.4rem; display: inline-flex; align-items: center; justify-content: center; }
 .sidebar-footer { margin-top:auto; padding:1rem; border-radius:1rem; color:#bfdbfe; background:rgba(255,255,255,.07); font-size:.75rem; line-height:1.5; }
 
 .admin-header { position:sticky; top:0; z-index:30; margin-left:17rem; background:rgba(248,251,255,.75) !important; border-bottom:1px solid rgba(203,213,225,.55); box-shadow:none !important; backdrop-filter:blur(18px); }
