@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS form_submissions (
         CHECK (gender IN ('Male', 'Female', 'Other')),
     age INTEGER NOT NULL CHECK (age BETWEEN 1 AND 150),
     contact_number VARCHAR(30) NOT NULL,
+    disease TEXT,
     reference TEXT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'Pending'
         CHECK (status IN ('Pending', 'Approved', 'Rejected')),
@@ -197,3 +198,6 @@ CREATE TABLE IF NOT EXISTS submission_payment_history (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_payment_history_submission ON submission_payment_history (submission_id, created_at DESC);
+
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS disease TEXT;
+ALTER TABLE form_submissions ALTER COLUMN disease TYPE TEXT;

@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       contactNumber: body.contactNumber?.trim() || null,
       address: body.address.trim(),
       currentLocation: body.currentLocation.trim(),
+      disease: body.disease?.trim() || '',
       documents,
     });
 

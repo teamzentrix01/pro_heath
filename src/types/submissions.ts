@@ -35,6 +35,7 @@ export interface UserSubmission {
   contactNumber: string | null;
   address: string;
   currentLocation: string;
+  disease: string;
   status: SubmissionStatus;
   treatmentStatus: TreatmentStatus;
   referralAmount: number | null;

@@ -83,7 +83,8 @@ export const AdminDashboard = () => {
   const [submissionPeriodFilter, setSubmissionPeriodFilter] = useState<'All' | 'weekly' | 'monthly'>('All');
   const [submissionPeriodDate, setSubmissionPeriodDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusFilter, setStatusFilter] = useState<'All' | SubmissionStatus>('All');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [reviewLead, setReviewLead] = useState<UserSubmission | null>(null);
+  const activeLead = reviewLead ? submissions.find(s => s.id === reviewLead.id) || reviewLead : null;
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [analyticsDate, setAnalyticsDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [userAnalyticsRows, setUserAnalyticsRows] = useState<UserAnalyticsRow[]>([]);
@@ -280,6 +281,7 @@ export const AdminDashboard = () => {
         submission.age,
         submission.contactNumber ?? '',
         submission.fatherName,
+        submission.disease || '',
         submission.address,
         submission.currentLocation,
         submission.status,
@@ -862,251 +864,127 @@ export const AdminDashboard = () => {
                 <tbody>
                   {filteredSubmissions.map((submission) => {
                     const status = submission.status ?? 'Pending';
-                    const isExpanded = expandedId === submission.id;
 
                     return (
-                      <React.Fragment key={submission.id}>
-                        <tr className="border-b border-gray-100">
-                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                            <div className="flex items-center gap-2">{submission.fullName}{!submission.adminSeenAt && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}</div>
-                          </td>
-                          {/* 2. Referral Source */}
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {submission.submittedByRole === 'doctor' ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 border border-teal-200 uppercase tracking-wider">
-                                  Doctor Referral
-                                </span>
-                                <div className="font-semibold text-slate-800">
-                                  Dr. {submission.submittedByName}
-                                </div>
-                                <div className="text-xs text-slate-400 break-all">
-                                  {submission.submittedByEmail}
-                                </div>
-                                <div className="mt-1">
-                                  <span className="text-[11px] font-medium text-blue-600 bg-blue-50/70 border border-blue-100 px-1.5 py-0.5 rounded inline-block">
-                                    PRO: {submission.parentProName}
-                                  </span>
-                                </div>
+                      <tr key={submission.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition">
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          <div className="flex items-center gap-2">{submission.fullName}{!submission.adminSeenAt && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}</div>
+                        </td>
+                        {/* 2. Referral Source */}
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {submission.submittedByRole === 'doctor' ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 border border-teal-200 uppercase tracking-wider">
+                                Doctor Referral
+                              </span>
+                              <div className="font-semibold text-slate-800">
+                                Dr. {submission.submittedByName}
                               </div>
-                            ) : submission.submittedByRole === 'pro' ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 border border-indigo-200 uppercase tracking-wider">
-                                  Direct PRO
-                                </span>
-                                <div className="font-semibold text-slate-800">
-                                  {submission.submittedByName}
-                                </div>
-                                <div className="text-xs text-slate-400 break-all">
-                                  {submission.submittedByEmail}
-                                </div>
+                              <div className="text-xs text-slate-400 break-all">
+                                {submission.submittedByEmail}
                               </div>
-                            ) : (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200 uppercase tracking-wider">
-                                  Admin Submission
+                              <div className="mt-1">
+                                <span className="text-[11px] font-medium text-blue-600 bg-blue-50/70 border border-blue-100 px-1.5 py-0.5 rounded inline-block">
+                                  PRO: {submission.parentProName}
                                 </span>
-                                <div className="font-semibold text-slate-800">
-                                  {submission.submittedByName}
-                                </div>
-                                <div className="text-xs text-slate-400 break-all">
-                                  {submission.submittedByEmail}
-                                </div>
                               </div>
-                            )}
-                          </td>
-
-                          {/* 3. Contact */}
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {submission.contactNumber || 'Not provided'}
-                          </td>
-
-                          {/* 4. Files */}
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {submission.documents.length} file(s)
-                          </td>
-
-                          {/* 5. Submitted */}
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {new Date(submission.submittedAt).toLocaleString()}
-                          </td>
-
-                          {/* 6. Approval */}
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>
-                              {status}
-                            </span>
-                          </td>
-
-                          {/* 7. Treatment & Referral */}
-                          <td className="overflow-hidden px-4 py-3">
-                            {status === 'Approved' ? (
-                              <CareManagement
-                                submission={submission}
-                                compact={true}
-                                onUpdated={(updated) =>
-                                  setSubmissions((current) =>
-                                    current.map((item) => (item.id === updated.id ? updated : item))
-                                  )
-                                }
-                              />
-                            ) : (
-                              <span className="text-gray-400 text-xs font-medium">—</span>
-                            )}
-                          </td>
-
-                          {/* 8. Actions */}
-                          <td className="px-4 py-3">
-                            <div className="flex min-w-[9rem] flex-col gap-2 xl:flex-row">
-                              {status === 'Pending' && <select
-                                aria-label={`Decide status for ${submission.fullName}`}
-                                value=""
-                                onChange={(event) => {
-                                  const nextStatus = event.target.value as SubmissionStatus;
-                                  if (nextStatus) {
-                                    setStatusReason('');
-                                    setStatusAction({ submission, status: nextStatus });
-                                  }
-                                }}
-                                className="min-h-0 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500"
-                              >
-                                <option value="">Decision…</option>
-                                <option value="Approved">Approve</option>
-                                <option value="Rejected">Reject</option>
-                              </select>}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpandedId(isExpanded ? null : submission.id);
-                                  if (!submission.adminSeenAt) void markSeen(submission.id);
-                                }}
-                                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-700"
-                              >
-                                {isExpanded ? 'Hide Details' : 'Review'}
-                              </button>
                             </div>
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr className="bg-gray-50">
-                            <td colSpan={8} className="px-6 py-6">
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                                  <h3 className="font-bold text-gray-900 mb-4">Full Lead Details</h3>
-                                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                      <dt className="text-gray-500">Submission ID</dt>
-                                      <dd className="text-gray-900 font-medium break-all">{submission.id}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-500">Status</dt>
-                                      <dd className="text-gray-900 font-medium">{status}</dd>
-                                    </div>
-                                    {submission.rejectionReason && <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 p-3">
-                                      <dt className="font-semibold text-red-700">Rejection reason</dt>
-                                      <dd className="mt-1 whitespace-pre-wrap text-red-900">{submission.rejectionReason}</dd>
-                                    </div>}
-                                    <div>
-                                      <dt className="text-gray-500">Patient Name</dt>
-                                      <dd className="text-gray-900 font-medium">{submission.fullName}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-500">Submitted By (PRO)</dt>
-                                      <dd className="text-gray-900 font-medium break-all">
-                                        {submission.submittedByEmail}
-                                      </dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-500">Gender</dt>
-                                      <dd className="text-gray-900 font-medium">{submission.gender}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-500">Age</dt>
-                                      <dd className="text-gray-900 font-medium">{submission.age}</dd>
-                                    </div>
-                                    <div>
-                                      <dt className="text-gray-500">Contact Number</dt>
-                                      <dd className="text-gray-900 font-medium">
-                                        {submission.contactNumber || 'Not provided'}
-                                      </dd>
-                                    </div>
-                                    <div><dt className="text-gray-500">Father&apos;s Name</dt><dd className="font-medium text-gray-900">{submission.fatherName}</dd></div>
-                                    <div className="sm:col-span-2"><dt className="text-gray-500">Permanent Address</dt><dd className="whitespace-pre-wrap font-medium text-gray-900">{submission.address}</dd></div>
-                                    <div className="sm:col-span-2"><dt className="text-gray-500">Current Location</dt><dd className="whitespace-pre-wrap font-medium text-gray-900">{submission.currentLocation}</dd></div>
-                                    <div className="sm:col-span-2">
-                                      <dt className="text-gray-500">Submitted At</dt>
-                                      <dd className="text-gray-900 font-medium">
-                                        {new Date(submission.submittedAt).toLocaleString()}
-                                      </dd>
-                                    </div>
-                                    {submission.statusHistory.length > 0 && <div className="sm:col-span-2 border-t border-slate-100 pt-4">
-                                      <dt className="mb-3 font-bold text-slate-900">Status history</dt>
-                                      <dd className="space-y-2">
-                                        {submission.statusHistory.map((event) => <div key={event.id} className="flex flex-col justify-between gap-1 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-center">
-                                          <span><strong>{event.fromStatus}</strong> → <strong>{event.toStatus}</strong>{event.reason && <span className="mt-1 block text-xs text-slate-600">{event.reason}</span>}</span>
-                                          <time className="text-xs text-slate-400">{new Date(event.createdAt).toLocaleString()}</time>
-                                        </div>)}
-                                      </dd>
-                                    </div>}
-                                    <div className="sm:col-span-2"><CareManagement submission={submission} onUpdated={(updated) => setSubmissions(current => current.map(item => item.id === updated.id ? updated : item))} /></div>
-                                  </dl>
-                                </div>
-
-                                <div className="bg-white border border-gray-200 rounded-lg p-5">
-                                  <h3 className="font-bold text-gray-900 mb-4">Uploaded Files</h3>
-                                  {submission.documents.length === 0 ? (
-                                    <p className="text-sm text-gray-500">No files were uploaded with this lead.</p>
-                                  ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                      {submission.documents.map((document, index) => {
-                                        const file =
-                                          typeof document === 'string'
-                                            ? { name: document, isImage: false }
-                                            : document;
-
-                                        return (
-                                          <div key={`${file.name}-${index}`} className="border border-gray-200 rounded-lg p-3">
-                                            {file.isImage && file.dataUrl ? (
-                                              <Image
-                                                src={file.dataUrl}
-                                                alt={file.name}
-                                                width={320}
-                                                height={192}
-                                                unoptimized
-                                                className="w-full h-48 object-cover rounded-md border border-gray-200 mb-3"
-                                              />
-                                            ) : (
-                                              <div className="h-28 rounded-md border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-sm text-gray-500 mb-3">
-                                                File preview unavailable
-                                              </div>
-                                            )}
-                                            <p className="text-sm font-medium text-gray-900 break-all">{file.name}</p>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                              {[file.type, formatFileSize(file.size)].filter(Boolean).join(' - ')}
-                                            </p>
-                                            {file.dataUrl && (
-                                              <button
-                                                type="button"
-                                                onClick={() => downloadFile(file.dataUrl!, file.name)}
-                                                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-                                              >
-                                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                </svg>
-                                                Download
-                                              </button>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
+                          ) : submission.submittedByRole === 'pro' ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+                                Direct PRO
+                              </span>
+                              <div className="font-semibold text-slate-800">
+                                {submission.submittedByName}
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
+                              <div className="text-xs text-slate-400 break-all">
+                                {submission.submittedByEmail}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200 uppercase tracking-wider">
+                                Admin Entry
+                              </span>
+                              <div className="font-semibold text-slate-800">
+                                {submission.submittedByName}
+                              </div>
+                              <div className="text-xs text-slate-400 break-all">
+                                {submission.submittedByEmail}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 3. Contact */}
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {submission.contactNumber || 'Not provided'}
+                        </td>
+
+                        {/* 4. Files */}
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {submission.documents.length} file(s)
+                        </td>
+
+                        {/* 5. Submitted */}
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {new Date(submission.submittedAt).toLocaleString()}
+                        </td>
+
+                        {/* 6. Approval */}
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[status]}`}>
+                            {status}
+                          </span>
+                        </td>
+
+                        {/* 7. Treatment & Referral */}
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {status === 'Approved' ? (
+                            <div className="space-y-1">
+                              <div>
+                                <span className="text-xs text-slate-500">Treatment: </span>
+                                <span className="font-semibold text-slate-800">{submission.treatmentStatus}</span>
+                              </div>
+                              {submission.referralAmount !== null && (
+                                <div>
+                                  <span className="text-xs text-slate-500">Amount: </span>
+                                  <span className="font-bold text-emerald-600">₹{submission.referralAmount.toLocaleString('en-IN')}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="text-xs text-slate-500">Payment: </span>
+                                <span className={`font-semibold ${
+                                  submission.paymentStatus === 'Paid' ? 'text-green-600' :
+                                  submission.paymentStatus === 'Processing' ? 'text-blue-600' :
+                                  'text-amber-600'
+                                }`}>
+                                  {submission.paymentStatus}
+                                </span>
+                                {submission.paymentMethod && (
+                                  <span className="text-xs text-slate-500"> ({submission.paymentMethod})</span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs font-medium">—</span>
+                          )}
+                        </td>
+
+                        {/* 8. Actions */}
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReviewLead(submission);
+                              if (!submission.adminSeenAt) void markSeen(submission.id);
+                            }}
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 w-full sm:w-auto"
+                          >
+                            Review
+                          </button>
+                        </td>
+                      </tr>
                     );
                   })}
                 </tbody>
@@ -1115,6 +993,245 @@ export const AdminDashboard = () => {
           )}
         </section>
       </main>
+
+      {/* Review Lead Modal */}
+      {activeLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <section className="relative w-full max-w-5xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5 bg-slate-50">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-slate-950">Review Patient Lead</h2>
+                  <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                    activeLead.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                    activeLead.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                    'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
+                    {activeLead.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">ID: {activeLead.id} • Submitted: {new Date(activeLead.submittedAt).toLocaleString()}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewLead(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition text-xl font-bold"
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 overflow-y-auto min-h-0">
+              {/* Left Column - Lead Details & Files */}
+              <div className="space-y-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                  <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wide">Patient Information</h3>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <dt className="text-gray-500">Patient Name</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.fullName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Father's Name</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.fatherName || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Gender</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.gender}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Age</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.age}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Contact Number</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.contactNumber || 'Not provided'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Disease / Diagnosis</dt>
+                      <dd className="text-gray-900 font-semibold whitespace-pre-line">{activeLead.disease || 'Not provided'}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-gray-500">Permanent Address</dt>
+                      <dd className="text-gray-900 font-semibold whitespace-pre-wrap">{activeLead.address}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-gray-500">Current Location</dt>
+                      <dd className="text-gray-900 font-semibold whitespace-pre-wrap">{activeLead.currentLocation}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                  <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wide">Referral Source</h3>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <dt className="text-gray-500">Submitted By</dt>
+                      <dd className="text-gray-900 font-semibold">{activeLead.submittedByName} ({activeLead.submittedByRole.toUpperCase()})</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Email Address</dt>
+                      <dd className="text-gray-900 font-semibold break-all">{activeLead.submittedByEmail}</dd>
+                    </div>
+                    {activeLead.submittedByRole === 'doctor' && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-gray-500">Linked PRO Account</dt>
+                        <dd className="text-gray-900 font-semibold">{activeLead.parentProName}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                  <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wide">Uploaded Files</h3>
+                  {activeLead.documents.length === 0 ? (
+                    <p className="text-sm text-gray-500">No files were uploaded with this lead.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {activeLead.documents.map((document, index) => {
+                        const file =
+                          typeof document === 'string'
+                            ? { name: document, isImage: false }
+                            : document;
+
+                        return (
+                          <div key={`${file.name}-${index}`} className="border border-slate-200 bg-white rounded-lg p-3">
+                            {file.isImage && file.dataUrl ? (
+                              <Image
+                                src={file.dataUrl}
+                                alt={file.name}
+                                width={320}
+                                height={192}
+                                unoptimized
+                                className="w-full h-32 object-cover rounded-md border border-gray-200 mb-2"
+                              />
+                            ) : (
+                              <div className="h-24 rounded-md border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-xs text-gray-500 mb-2">
+                                File preview unavailable
+                              </div>
+                            )}
+                            <p className="text-xs font-semibold text-gray-900 truncate">{file.name}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {[file.type, formatFileSize(file.size)].filter(Boolean).join(' - ')}
+                            </p>
+                            {file.dataUrl && (
+                              <button
+                                type="button"
+                                onClick={() => downloadFile(file.dataUrl!, file.name)}
+                                className="mt-2 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 transition hover:bg-blue-100"
+                              >
+                                Download
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column - Status updates, Care management, History */}
+              <div className="space-y-6">
+                {/* 1. Approval Decisions (If Status is Pending) */}
+                {activeLead.status === 'Pending' && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                    <h3 className="font-bold text-slate-900 mb-3 text-sm uppercase tracking-wide">Approval Decision</h3>
+                    <p className="text-xs text-slate-500 mb-4">Please review the details and files. Approve or Reject this referral.</p>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatusReason('');
+                          setStatusAction({ submission: activeLead, status: 'Approved' });
+                        }}
+                        className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-sm"
+                      >
+                        Approve Lead
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatusReason('');
+                          setStatusAction({ submission: activeLead, status: 'Rejected' });
+                        }}
+                        className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 shadow-sm"
+                      >
+                        Reject Lead
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Rejection Info Banner (If Status is Rejected) */}
+                {activeLead.status === 'Rejected' && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <h4 className="font-bold text-red-800 text-sm">Lead Rejected</h4>
+                    <p className="mt-1 text-xs text-red-900 whitespace-pre-wrap leading-relaxed">
+                      <strong>Reason: </strong>{activeLead.rejectionReason || 'No reason provided.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* 3. Care & Referral Management (If Status is Approved) */}
+                {activeLead.status === 'Approved' && (
+                  <CareManagement
+                    submission={activeLead}
+                    onUpdated={(updated) =>
+                      setSubmissions((current) =>
+                        current.map((item) => (item.id === updated.id ? updated : item))
+                      )
+                    }
+                  />
+                )}
+
+                {/* 4. Status History Timeline */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                  <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wide">Status History</h3>
+                  {activeLead.statusHistory.length === 0 ? (
+                    <p className="text-xs text-slate-500">No status updates recorded yet.</p>
+                  ) : (
+                    <div className="relative border-l border-slate-200 pl-4 ml-2 space-y-4">
+                      {activeLead.statusHistory.map((event) => (
+                        <div key={event.id} className="relative">
+                          <div className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-blue-600 ring-4 ring-white" />
+                          <div className="text-xs">
+                            <div className="font-bold text-slate-800">
+                              {event.fromStatus} &rarr; {event.toStatus}
+                            </div>
+                            {event.reason && (
+                              <p className="mt-1 text-[11px] text-slate-600 leading-normal bg-white p-2 rounded border border-slate-100">
+                                {event.reason}
+                              </p>
+                            )}
+                            <time className="block text-[10px] text-slate-400 mt-1">
+                              {new Date(event.createdAt).toLocaleString()}
+                            </time>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end border-t border-slate-200 px-6 py-4 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setReviewLead(null)}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 transition"
+              >
+                Close Review
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {statusAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
