@@ -472,8 +472,9 @@ export const updateSubmissionCare = async (input: {
      )
      UPDATE form_submissions fs
      SET treatment_status = input.next_treatment_status,
-         referral_amount = input.next_referral_amount,
+         referral_amount = CASE WHEN submitter.role = 'doctor' THEN input.next_referral_amount ELSE NULL END,
          payment_status = CASE
+           WHEN submitter.role <> 'doctor' THEN 'Not Applicable'
            WHEN input.next_payment_status IS NOT NULL THEN input.next_payment_status
            WHEN input.next_referral_amount > 0 AND submitter.role = 'doctor' AND fs.payment_method IS NULL THEN 'Awaiting Method'
            WHEN input.next_referral_amount > 0 AND submitter.role = 'doctor' THEN 'Payment Pending'
@@ -605,8 +606,76 @@ export const listSubmissionsByUserId = async (userId: string, role: 'pro' | 'doc
   return result.rows.map(mapSubmission);
 };
 
-export const getUserSubmissionAnalytics = async (period: 'weekly' | 'monthly', date: string) => {
-  const truncUnit = period === 'weekly' ? 'week' : 'month';
+export const getUserSubmissionAnalytics = async (filters: {
+  period: 'weekly' | 'monthly';
+  date: string;
+  groupBy?: 'pro' | 'doctor';
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  patientName?: string | null;
+}) => {
+  const truncUnit = filters.period === 'weekly' ? 'week' : 'month';
+  const groupBy = filters.groupBy || 'pro';
+  
+  const whereClauses: string[] = [
+    `fs.submitted_at >= date_trunc($1, $2::date)`,
+    `fs.submitted_at < date_trunc($1, $2::date) + $3::interval`
+  ];
+  
+  const queryParams: any[] = [
+    truncUnit,
+    filters.date,
+    filters.period === 'weekly' ? '1 week' : '1 month'
+  ];
+
+  if (groupBy === 'doctor') {
+    whereClauses.push(`au.role = 'doctor'`);
+  }
+
+  if (filters.minAmount !== undefined && filters.minAmount !== null) {
+    queryParams.push(filters.minAmount);
+    whereClauses.push(`fs.referral_amount >= $${queryParams.length}`);
+  }
+
+  if (filters.maxAmount !== undefined && filters.maxAmount !== null) {
+    queryParams.push(filters.maxAmount);
+    whereClauses.push(`fs.referral_amount <= $${queryParams.length}`);
+  }
+
+  if (filters.patientName) {
+    queryParams.push(`%${filters.patientName.toLowerCase()}%`);
+    whereClauses.push(`LOWER(fs.full_name) LIKE $${queryParams.length}`);
+  }
+
+  const selectUserExpr = groupBy === 'pro'
+    ? `COALESCE(parent_pro.id, au.id)`
+    : `au.id`;
+    
+  const selectEmailExpr = groupBy === 'pro'
+    ? `COALESCE(parent_pro.email, au.email, 'Unknown user')`
+    : `COALESCE(au.email, 'Unknown user')`;
+    
+  const selectNameExpr = groupBy === 'pro'
+    ? `COALESCE(parent_pro.full_name, au.full_name)`
+    : `au.full_name`;
+
+  const sql = `
+    SELECT
+      ${selectUserExpr} AS user_id,
+      ${selectEmailExpr} AS email,
+      ${selectNameExpr} AS full_name,
+      COUNT(*)::int AS count,
+      COUNT(*) FILTER (WHERE fs.status = 'Pending')::int AS pending_count,
+      COUNT(*) FILTER (WHERE fs.status = 'Approved')::int AS approved_count,
+      COUNT(*) FILTER (WHERE fs.status = 'Rejected')::int AS rejected_count
+    FROM form_submissions fs
+    LEFT JOIN app_users au ON au.id = fs.user_id
+    LEFT JOIN app_users parent_pro ON parent_pro.id = au.created_by_user_id
+    WHERE ${whereClauses.join(' AND ')}
+    GROUP BY ${selectUserExpr}, ${selectEmailExpr}, ${selectNameExpr}
+    ORDER BY count DESC, email ASC
+  `;
+
   const result = await dbQuery<{
     user_id: string | null;
     email: string;
@@ -615,24 +684,7 @@ export const getUserSubmissionAnalytics = async (period: 'weekly' | 'monthly', d
     pending_count: number;
     approved_count: number;
     rejected_count: number;
-  }>(
-    `SELECT
-       COALESCE(parent_pro.id, au.id) AS user_id,
-       COALESCE(parent_pro.email, au.email, 'Unknown user') AS email,
-       COALESCE(parent_pro.full_name, au.full_name) AS full_name,
-       COUNT(*)::int AS count,
-       COUNT(*) FILTER (WHERE fs.status = 'Pending')::int AS pending_count,
-       COUNT(*) FILTER (WHERE fs.status = 'Approved')::int AS approved_count,
-       COUNT(*) FILTER (WHERE fs.status = 'Rejected')::int AS rejected_count
-     FROM form_submissions fs
-     LEFT JOIN app_users au ON au.id = fs.user_id
-     LEFT JOIN app_users parent_pro ON parent_pro.id = au.created_by_user_id
-     WHERE fs.submitted_at >= date_trunc($1, $2::date)
-       AND fs.submitted_at < date_trunc($1, $2::date) + $3::interval
-     GROUP BY COALESCE(parent_pro.id, au.id), COALESCE(parent_pro.email, au.email, 'Unknown user'), COALESCE(parent_pro.full_name, au.full_name)
-     ORDER BY count DESC, email ASC`,
-    [truncUnit, date, period === 'weekly' ? '1 week' : '1 month']
-  );
+  }>(sql, queryParams);
 
   return result.rows.map<UserAnalyticsRow>((row) => ({
     userId: row.user_id,

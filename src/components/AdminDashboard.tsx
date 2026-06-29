@@ -87,6 +87,10 @@ export const AdminDashboard = () => {
   const activeLead = reviewLead ? submissions.find(s => s.id === reviewLead.id) || reviewLead : null;
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [analyticsDate, setAnalyticsDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [analyticsGroupBy, setAnalyticsGroupBy] = useState<'pro' | 'doctor'>('pro');
+  const [analyticsMinAmount, setAnalyticsMinAmount] = useState('');
+  const [analyticsMaxAmount, setAnalyticsMaxAmount] = useState('');
+  const [analyticsPatientName, setAnalyticsPatientName] = useState('');
   const [userAnalyticsRows, setUserAnalyticsRows] = useState<UserAnalyticsRow[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<AppUser[]>([]);
   const [newUser, setNewUser] = useState({
@@ -190,7 +194,12 @@ export const AdminDashboard = () => {
         const params = new URLSearchParams({
           period: analyticsPeriod,
           date: analyticsDate,
+          groupBy: analyticsGroupBy,
         });
+        if (analyticsMinAmount) params.append('minAmount', analyticsMinAmount);
+        if (analyticsMaxAmount) params.append('maxAmount', analyticsMaxAmount);
+        if (analyticsPatientName) params.append('patientName', analyticsPatientName);
+
         const response = await apiFetch(`/api/analytics/users?${params.toString()}`);
 
         if (!response.ok) {
@@ -205,7 +214,7 @@ export const AdminDashboard = () => {
     };
 
     void loadUserAnalytics();
-  }, [analyticsDate, analyticsPeriod]);
+  }, [analyticsDate, analyticsPeriod, analyticsGroupBy, analyticsMinAmount, analyticsMaxAmount, analyticsPatientName]);
 
   const updateStatus = async (submissionId: string, status: SubmissionStatus, reason = '') => {
     setDashboardError('');
@@ -758,54 +767,136 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
-        <section id="analytics" className={`${activeSection === 'analytics' ? '' : 'hidden'} bg-white rounded-lg shadow p-6`}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <section id="analytics" className={`${activeSection === 'analytics' ? '' : 'hidden'} bg-white rounded-2xl shadow-xl p-6 border border-slate-100`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-100 pb-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">PRO Lead Analytics</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Patients submitted directly or through doctors linked to each PRO.
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2" />
+                </svg>
+                Lead Performance Analytics
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {analyticsGroupBy === 'pro'
+                  ? 'Patients submitted directly or through doctors linked to each PRO.'
+                  : 'Patients submitted grouped by the submitting doctor.'}
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div>
-                <label htmlFor="analyticsPeriod" className="mb-1 block text-xs font-semibold text-slate-600">Period</label>
-                <select id="analyticsPeriod" value={analyticsPeriod} onChange={(event) => setAnalyticsPeriod(event.target.value as 'weekly' | 'monthly')} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="analyticsDate" className="mb-1 block text-xs font-semibold text-slate-600">Selected date</label>
-                <input id="analyticsDate" type="date" value={analyticsDate} onChange={(event) => setAnalyticsDate(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              </div>
+            
+            <div className="flex items-center bg-slate-100 p-1.5 rounded-xl self-start lg:self-auto border border-slate-200/50">
+              <button
+                type="button"
+                onClick={() => setAnalyticsGroupBy('pro')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  analyticsGroupBy === 'pro'
+                    ? 'bg-white text-blue-600 shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                PRO-wise Leads
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnalyticsGroupBy('doctor')}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  analyticsGroupBy === 'doctor'
+                    ? 'bg-white text-blue-600 shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Doctor-wise Leads
+              </button>
             </div>
           </div>
-          <div className="mt-5 overflow-x-auto">
+
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60 shadow-sm">
+            <div>
+              <label htmlFor="analyticsPeriod" className="mb-1.5 block text-xs font-bold text-slate-700">Period</label>
+              <select
+                id="analyticsPeriod"
+                value={analyticsPeriod}
+                onChange={(event) => setAnalyticsPeriod(event.target.value as 'weekly' | 'monthly')}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition shadow-sm font-medium"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="analyticsDate" className="mb-1.5 block text-xs font-bold text-slate-700">Selected date</label>
+              <input
+                id="analyticsDate"
+                type="date"
+                value={analyticsDate}
+                onChange={(event) => setAnalyticsDate(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition shadow-sm font-medium"
+              />
+            </div>
+            <div>
+              <label htmlFor="analyticsPatientName" className="mb-1.5 block text-xs font-bold text-slate-700">Patient Name</label>
+              <input
+                id="analyticsPatientName"
+                type="text"
+                placeholder="Search patient name..."
+                value={analyticsPatientName}
+                onChange={(event) => setAnalyticsPatientName(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition shadow-sm font-medium"
+              />
+            </div>
+            <div>
+              <label htmlFor="analyticsMinAmount" className="mb-1.5 block text-xs font-bold text-slate-700">Min Referral Amount (₹)</label>
+              <input
+                id="analyticsMinAmount"
+                type="number"
+                min="0"
+                placeholder="Min ₹"
+                value={analyticsMinAmount}
+                onChange={(event) => setAnalyticsMinAmount(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition shadow-sm font-medium"
+              />
+            </div>
+            <div>
+              <label htmlFor="analyticsMaxAmount" className="mb-1.5 block text-xs font-bold text-slate-700">Max Referral Amount (₹)</label>
+              <input
+                id="analyticsMaxAmount"
+                type="number"
+                min="0"
+                placeholder="Max ₹"
+                value={analyticsMaxAmount}
+                onChange={(event) => setAnalyticsMaxAmount(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition shadow-sm font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-xl border border-slate-100 shadow-sm">
             {userAnalyticsRows.length === 0 ? (
-              <p className="text-gray-500 text-sm">No PRO leads found for this selected period.</p>
+              <div className="p-8 text-center text-slate-500 bg-slate-50/20">
+                <p className="text-sm font-medium">No leads match the selected filters and period.</p>
+              </div>
             ) : (
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total Leads</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Pending</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Approved</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Rejected</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Email</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Name</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Total Leads</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Pending</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Approved</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Rejected</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {userAnalyticsRows.map((row) => (
-                    <tr key={row.userId ?? row.email} className="border-b border-gray-100">
-                      <td className="px-4 py-3 text-sm text-gray-900">{row.email}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {row.fullName || 'Not provided'}
+                    <tr key={row.userId ?? row.email} className="hover:bg-slate-50/50 transition duration-150">
+                      <td className="px-6 py-4 text-sm text-slate-900 font-medium">{row.email}</td>
+                      <td className="px-6 py-4 text-sm text-slate-900">
+                        {row.fullName || '—'}
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.count}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-yellow-700">{row.pendingCount}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-green-700">{row.approvedCount}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-red-700">{row.rejectedCount}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-900">{row.count}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-amber-600">{row.pendingCount}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-emerald-600">{row.approvedCount}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-rose-600">{row.rejectedCount}</td>
                     </tr>
                   ))}
                 </tbody>

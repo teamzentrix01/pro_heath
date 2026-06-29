@@ -58,9 +58,11 @@ export const CareManagement = ({
     setSaving(true);
     setMessage('');
     
-    // Referral amount is only applicable when status is 'Discharged'
+    // Referral amount is only applicable when status is 'Discharged' and lead is from a doctor
     const nextReferralAmount =
-      treatmentStatus === 'Discharged' ? (amount === '' ? null : Number(amount)) : null;
+      treatmentStatus === 'Discharged' && submission.submittedByRole === 'doctor'
+        ? (amount === '' ? null : Number(amount))
+        : null;
 
     try {
       const response = await apiFetch(`/api/submissions/${submission.id}/care`, {
@@ -106,7 +108,7 @@ export const CareManagement = ({
           <option value="Discharged">Discharged</option>
         </select>
 
-        {treatmentStatus === 'Discharged' && (
+        {treatmentStatus === 'Discharged' && submission.submittedByRole === 'doctor' && (
           <input
             type="number"
             min="0"
@@ -222,7 +224,7 @@ export const CareManagement = ({
           <option value="Discharged">3. Discharged</option>
         </select>
 
-        {treatmentStatus === 'Discharged' && (
+        {treatmentStatus === 'Discharged' && submission.submittedByRole === 'doctor' && (
           <input
             type="number"
             min="0"
