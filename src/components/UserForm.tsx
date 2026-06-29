@@ -515,11 +515,7 @@ export const UserForm = () => {
             <h2>Patient information</h2>
             <p>Enter the patient details below. Fields marked with an asterisk are required.</p>
           </div>
-          {successMessage && (
-            <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-              {successMessage}
-            </div>
-          )}
+
 
           <form key={patientFormResetKey} onSubmit={handleSubmit} autoComplete="off" className="space-y-7">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -933,6 +929,30 @@ export const UserForm = () => {
                 </div>
               )}
             </div>
+          </section>
+        </div>
+      )}
+      {successMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl flex flex-col items-center text-center border border-slate-100">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-4 shadow-sm ring-8 ring-emerald-50">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            
+            <h3 className="text-xl font-bold text-slate-900">Lead Submitted!</h3>
+            <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+              {successMessage}
+            </p>
+            
+            <button
+              type="button"
+              onClick={() => setSuccessMessage('')}
+              className="mt-6 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition duration-150 outline-none focus:ring-4 focus:ring-emerald-100"
+            >
+              Okay, Got it
+            </button>
           </section>
         </div>
       )}
