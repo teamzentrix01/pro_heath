@@ -7,6 +7,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   TreatmentStatus,
+  LeadsDetailItem,
 } from '@/types/submissions';
 
 type SubmissionRow = {
@@ -667,7 +668,19 @@ export const getUserSubmissionAnalytics = async (filters: {
       COUNT(*)::int AS count,
       COUNT(*) FILTER (WHERE fs.status = 'Pending')::int AS pending_count,
       COUNT(*) FILTER (WHERE fs.status = 'Approved')::int AS approved_count,
-      COUNT(*) FILTER (WHERE fs.status = 'Rejected')::int AS rejected_count
+      COUNT(*) FILTER (WHERE fs.status = 'Rejected')::int AS rejected_count,
+      COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'patientName', fs.full_name,
+            'doctorName', CASE WHEN au.role = 'doctor' THEN au.full_name ELSE NULL END,
+            'proName', COALESCE(parent_pro.full_name, CASE WHEN au.role = 'pro' THEN au.full_name END),
+            'status', fs.status,
+            'referralAmount', fs.referral_amount
+          )
+        ),
+        '[]'::jsonb
+      ) AS leads_detail
     FROM form_submissions fs
     LEFT JOIN app_users au ON au.id = fs.user_id
     LEFT JOIN app_users parent_pro ON parent_pro.id = au.created_by_user_id
@@ -684,6 +697,7 @@ export const getUserSubmissionAnalytics = async (filters: {
     pending_count: number;
     approved_count: number;
     rejected_count: number;
+    leads_detail: LeadsDetailItem[];
   }>(sql, queryParams);
 
   return result.rows.map<UserAnalyticsRow>((row) => ({
@@ -694,5 +708,6 @@ export const getUserSubmissionAnalytics = async (filters: {
     pendingCount: row.pending_count,
     approvedCount: row.approved_count,
     rejectedCount: row.rejected_count,
+    leadsDetail: row.leads_detail || [],
   }));
 };

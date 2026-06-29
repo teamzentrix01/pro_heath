@@ -53,6 +53,14 @@ export interface UserSubmission {
 }
 
 
+export interface LeadsDetailItem {
+  patientName: string;
+  doctorName: string | null;
+  proName: string | null;
+  status: string;
+  referralAmount: number | null;
+}
+
 export interface UserAnalyticsRow {
   userId: string | null;
   email: string;
@@ -61,4 +69,5 @@ export interface UserAnalyticsRow {
   pendingCount: number;
   approvedCount: number;
   rejectedCount: number;
+  leadsDetail: LeadsDetailItem[];
 }
