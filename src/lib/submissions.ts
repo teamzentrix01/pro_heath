@@ -481,7 +481,7 @@ export const updateSubmissionCare = async (input: {
            WHEN input.next_referral_amount > 0 AND submitter.role = 'doctor' THEN 'Payment Pending'
            ELSE 'Not Applicable'
          END,
-         transaction_reference = COALESCE(input.next_transaction_reference, transaction_reference),
+         transaction_reference = CASE WHEN fs.payment_method = 'Cash' THEN NULL ELSE COALESCE(input.next_transaction_reference, transaction_reference) END,
          paid_at = CASE WHEN input.next_payment_status = 'Paid' THEN NOW() ELSE paid_at END,
          payment_updated_at = NOW(),
          updated_at = NOW()

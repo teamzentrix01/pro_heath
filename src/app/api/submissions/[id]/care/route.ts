@@ -1,5 +1,5 @@
 import { getAuthenticatedUser } from '@/lib/auth';
-import { canManageSubmission, updateSubmissionCare } from '@/lib/submissions';
+import { canManageSubmission, updateSubmissionCare, getSubmissionById } from '@/lib/submissions';
 import { PaymentStatus, TreatmentStatus } from '@/types/submissions';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -12,25 +12,34 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const { id } = await context.params;
   if (!(await canManageSubmission(id, user.id, user.role))) return NextResponse.json({ error: 'This patient is not assigned to you.' }, { status: 403 });
 
+  const submissionRecord = await getSubmissionById(id);
+  if (!submissionRecord) {
+    return NextResponse.json({ error: 'Submission not found.' }, { status: 404 });
+  }
+
   const body = await request.json();
   const treatmentStatus = body.treatmentStatus as TreatmentStatus;
   const referralAmount = body.referralAmount === '' || body.referralAmount == null ? null : Number(body.referralAmount);
   const paymentStatus = body.paymentStatus ? body.paymentStatus as PaymentStatus : undefined;
   const transactionReference = String(body.transactionReference ?? '').trim();
+  
   if (!treatments.includes(treatmentStatus) || (referralAmount !== null && (!Number.isFinite(referralAmount) || referralAmount < 0)) || (paymentStatus && !paymentStatuses.includes(paymentStatus))) {
     return NextResponse.json({ error: 'Invalid treatment or payment information.' }, { status: 400 });
   }
-  if (paymentStatus === 'Paid' && transactionReference.length < 3) {
+  
+  if (paymentStatus === 'Paid' && submissionRecord.paymentMethod !== 'Cash' && transactionReference.length < 3) {
     return NextResponse.json({ error: 'Enter the payment transaction or receipt reference.' }, { status: 400 });
   }
+  
   const submission = await updateSubmissionCare({
     id,
     changedBy: user.id,
     treatmentStatus,
     referralAmount,
     paymentStatus,
-    transactionReference: transactionReference || null,
+    transactionReference: submissionRecord.paymentMethod === 'Cash' ? null : (transactionReference || null),
     note: String(body.note ?? '').trim() || null,
   });
+  
   return submission ? NextResponse.json({ submission }) : NextResponse.json({ error: 'Accept the lead before updating patient care.' }, { status: 409 });
 }

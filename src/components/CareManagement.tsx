@@ -156,7 +156,7 @@ export const CareManagement = ({
               <option>Payment Failed</option>
               <option>On Hold</option>
             </select>
-            {['Processing', 'Paid', 'Payment Failed'].includes(paymentStatus) && (
+            {['Processing', 'Paid', 'Payment Failed'].includes(paymentStatus) && submission.paymentMethod !== 'Cash' && (
               <input
                 value={transactionReference}
                 onChange={(e) => setTransactionReference(e.target.value)}
@@ -253,7 +253,7 @@ export const CareManagement = ({
           </select>
         )}
 
-        {['Processing', 'Paid', 'Payment Failed'].includes(paymentStatus) && (
+        {['Processing', 'Paid', 'Payment Failed'].includes(paymentStatus) && submission.paymentMethod !== 'Cash' && (
           <input
             disabled={!isEditing}
             value={transactionReference}
