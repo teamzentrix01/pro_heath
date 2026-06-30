@@ -100,6 +100,31 @@ ALTER TABLE user_login_events ADD COLUMN IF NOT EXISTS login_at TIMESTAMPTZ NOT 
 ALTER TABLE user_login_events ADD COLUMN IF NOT EXISTS ip_address INET;
 ALTER TABLE user_login_events ADD COLUMN IF NOT EXISTS user_agent TEXT;
 
+-- Older installations stored the identifier in a required login_id column.
+-- Current authentication records email instead, so migrate legacy rows and
+-- stop the old column from rejecting otherwise valid login events.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'user_login_events'
+          AND column_name = 'login_id'
+    ) THEN
+        UPDATE user_login_events
+        SET email = login_id
+        WHERE email IS NULL;
+
+        ALTER TABLE user_login_events
+            ALTER COLUMN login_id DROP NOT NULL;
+    END IF;
+END
+$$;
+
+ALTER TABLE user_login_events
+    ALTER COLUMN email SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_user_login_events_user_id
     ON user_login_events (user_id);
 
