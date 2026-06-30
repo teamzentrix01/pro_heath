@@ -42,14 +42,14 @@ export const LoginForm = () => {
     }
 
     setIsSubmitting(true);
-    const success = await login(email.trim(), password);
+    const result = await login(email.trim(), password);
     setIsSubmitting(false);
     setPassword('');
 
-    if (success) {
+    if (result.success) {
       router.replace('/dashboard');
     } else {
-      setError('Invalid email or password');
+      setError(result.error || 'Invalid email or password');
     }
   };
 

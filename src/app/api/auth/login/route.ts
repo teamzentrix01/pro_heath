@@ -1,6 +1,7 @@
 import { authenticateUser } from '@/lib/users';
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } from '@/lib/auth';
+import { isDatabaseUnavailableError } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +40,20 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error(error);
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json(
+        {
+          error:
+            'Login service is temporarily unavailable because the database has reached its capacity limit. Please contact the administrator.',
+          code: 'DATABASE_UNAVAILABLE',
+        },
+        {
+          status: 503,
+          headers: { 'Retry-After': '300' },
+        }
+      );
+    }
+
     return NextResponse.json({ error: 'Unable to log in.' }, { status: 500 });
   }
 }

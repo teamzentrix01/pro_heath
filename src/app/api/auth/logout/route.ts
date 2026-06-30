@@ -8,9 +8,16 @@ export async function POST() {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   if (token) {
-    await dbQuery('DELETE FROM auth_sessions WHERE token_hash = $1', [
-      hashSessionToken(token),
-    ]);
+    try {
+      await dbQuery('DELETE FROM auth_sessions WHERE token_hash = $1', [
+        hashSessionToken(token),
+      ]);
+    } catch (error) {
+      // The local cookie must still be cleared if the database is unavailable.
+      // The server-side session expires automatically and remains unusable
+      // without its matching browser cookie.
+      console.error('Unable to remove the server session during logout:', error);
+    }
   }
 
   const response = NextResponse.json({ success: true });

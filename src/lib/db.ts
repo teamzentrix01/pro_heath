@@ -81,6 +81,22 @@ const isRetryableDatabaseError = (error: unknown) => {
   return RETRYABLE_DATABASE_CODES.has(code);
 };
 
+export const isDatabaseUnavailableError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+
+  const code = 'code' in error ? String(error.code) : '';
+  const message =
+    'message' in error ? String(error.message).toLowerCase() : '';
+
+  return (
+    RETRYABLE_DATABASE_CODES.has(code) ||
+    message.includes('data transfer quota') ||
+    message.includes('connection terminated') ||
+    message.includes('connection timeout') ||
+    message.includes('too many connections')
+  );
+};
+
 const wait = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 

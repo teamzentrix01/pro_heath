@@ -18,7 +18,10 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   isAuthReady: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   updateUser: (user: AppUser) => void;
   logout: () => void;
 }
@@ -81,8 +84,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const data = await response.json();
-        if (isMounted) {
+        if (isMounted && data.user) {
           saveUser(data.user);
+        } else if (isMounted) {
+          setUser(null);
+          window.localStorage.removeItem(AUTH_STORAGE_KEY);
+          window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
         }
       } catch {
         if (isMounted) {
@@ -115,14 +122,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (!response.ok) {
-        return false;
+        const data = await response.json().catch(() => null);
+        return {
+          success: false,
+          error:
+            data?.error ||
+            'Login is temporarily unavailable. Please try again shortly.',
+        };
       }
 
       const data = await response.json();
       saveUser(data.user);
-      return true;
+      return { success: true };
     } catch {
-      return false;
+      return {
+        success: false,
+        error:
+          'Unable to reach the login service. Check your connection and try again.',
+      };
     }
   };
 
