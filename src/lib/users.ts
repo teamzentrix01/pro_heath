@@ -99,7 +99,7 @@ export const authenticateUser = async (input: {
          last_login_ip = $3::inet,
          last_user_agent = $4,
          updated_at = NOW()
-       WHERE LOWER(email) = LOWER($1)
+       WHERE (LOWER(email) = LOWER($1) OR phone_number = $1)
          AND admin_created = TRUE
          AND is_active = TRUE
          AND password_hash = crypt($2, password_hash)

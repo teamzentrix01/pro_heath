@@ -52,7 +52,6 @@ export async function POST(request: NextRequest) {
 
     if (
       !body.fullName?.trim() ||
-      !body.fatherName?.trim() ||
       !allowedGenders.includes(body.gender) ||
       !Number.isInteger(age) ||
       age < 1 ||
@@ -60,9 +59,7 @@ export async function POST(request: NextRequest) {
       (
         body.contactNumber?.trim() &&
         !/^\d{10}$/.test(body.contactNumber.trim())
-      ) ||
-      !body.address?.trim() ||
-      !body.currentLocation?.trim()
+      )
     ) {
       return NextResponse.json({ error: 'Missing or invalid form fields' }, { status: 400 });
     }
@@ -96,13 +93,14 @@ export async function POST(request: NextRequest) {
     const submission = await createSubmission({
       userId: authenticatedUser.id,
       fullName: body.fullName.trim(),
-      fatherName: body.fatherName.trim(),
+      fatherName: body.fatherName?.trim() || null,
       gender: body.gender,
       age,
       contactNumber: body.contactNumber?.trim() || null,
-      address: body.address.trim(),
-      currentLocation: body.currentLocation.trim(),
+      address: body.address?.trim() || null,
+      currentLocation: body.currentLocation?.trim() || null,
       disease: body.disease?.trim() || '',
+      referralBy: authenticatedUser.role === 'pro' ? (body.referralBy?.trim() || null) : null,
       documents,
     });
 

@@ -50,6 +50,7 @@ export interface UserSubmission {
   statusHistory: SubmissionStatusEvent[];
   documents: UploadedDocument[];
   submittedAt: string;
+  referralBy: string | null;
 }
 
 

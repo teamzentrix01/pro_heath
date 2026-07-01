@@ -54,6 +54,7 @@ export const UserForm = () => {
     address: '',
     currentLocation: '',
     disease: '',
+    referralBy: '',
   });
 
   const [documents, setDocuments] = useState<File[]>([]);
@@ -229,12 +230,9 @@ export const UserForm = () => {
 
     if (
       !formData.fullName.trim() ||
-      !formData.fatherName.trim() ||
       !formData.gender ||
       !formData.age ||
-      (formData.contactNumber && !/^\d{10}$/.test(formData.contactNumber)) ||
-      !formData.address.trim() ||
-      !formData.currentLocation.trim()
+      (formData.contactNumber && !/^\d{10}$/.test(formData.contactNumber))
     ) {
       alert('Please fill in all required fields. If you enter a contact number, use 10 digits.');
       return;
@@ -273,6 +271,7 @@ export const UserForm = () => {
           address: formData.address,
           currentLocation: formData.currentLocation,
           disease: formData.disease,
+          referralBy: user?.isPro ? formData.referralBy : undefined,
           documents: uploadedFiles,
         }),
       });
@@ -291,6 +290,7 @@ export const UserForm = () => {
         address: '',
         currentLocation: '',
         disease: '',
+        referralBy: '',
       });
       setDocuments([]);
       setDocumentError('');
@@ -553,7 +553,7 @@ export const UserForm = () => {
               </div>
 
               <div>
-                <label htmlFor="fatherName" className="mb-2 block text-sm font-semibold text-slate-700">Father&apos;s Name <span className="text-red-500">*</span></label>
+                <label htmlFor="fatherName" className="mb-2 block text-sm font-semibold text-slate-700">Father&apos;s Name</label>
                 <input type="text" id="fatherName" name="fatherName" value={formData.fatherName} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Enter father's name" />
               </div>
 
@@ -612,14 +612,31 @@ export const UserForm = () => {
                   placeholder="Enter disease or diagnosis (Shift+Enter for new line)"
                 />
               </div>
+
+              {user?.isPro && (
+                <div>
+                  <label htmlFor="referralBy" className="mb-2 block text-sm font-semibold text-slate-700">
+                    Referral By (Doctor Name)
+                  </label>
+                  <input
+                    type="text"
+                    id="referralBy"
+                    name="referralBy"
+                    value={formData.referralBy}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    placeholder="Enter referring doctor's name"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">
-              <div><label htmlFor="address" className="mb-2 block text-sm font-semibold text-slate-700">Permanent Address <span className="text-red-500">*</span></label><textarea id="address" name="address" value={formData.address} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Full permanent address" rows={3} /></div>
+              <div><label htmlFor="address" className="mb-2 block text-sm font-semibold text-slate-700">Permanent Address</label><textarea id="address" name="address" value={formData.address} onChange={handleInputChange} className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Full permanent address" rows={3} /></div>
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="currentLocation" className="text-sm font-semibold text-slate-700">
-                    Current Location <span className="text-red-500">*</span>
+                    Current Location
                   </label>
                   <button
                     type="button"
@@ -900,7 +917,7 @@ export const UserForm = () => {
                     <tbody>
                       {displayedLeads.map((lead) => (
                         <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
-                          <td className="min-w-48 px-4 py-3 text-sm text-slate-900"><span className="font-semibold">{lead.fullName}</span><span className="mt-1 block text-xs text-slate-500">Father: {lead.fatherName || 'Not provided'}</span><span className="block text-xs text-slate-500 whitespace-pre-line">Disease: {lead.disease || 'Not provided'}</span><span className="block text-xs text-slate-500">Contact: {lead.contactNumber || 'Not provided'}</span><span className="block max-w-64 whitespace-normal text-xs text-slate-500">Location: {lead.currentLocation || lead.address}</span></td>
+                          <td className="min-w-48 px-4 py-3 text-sm text-slate-900"><span className="font-semibold">{lead.fullName}</span><span className="mt-1 block text-xs text-slate-500">Father: {lead.fatherName || 'Not provided'}</span><span className="block text-xs text-slate-500 whitespace-pre-line">Disease: {lead.disease || 'Not provided'}</span><span className="block text-xs text-slate-500">Contact: {lead.contactNumber || 'Not provided'}</span><span className="block max-w-64 whitespace-normal text-xs text-slate-500">Location: {lead.currentLocation || lead.address || 'Not provided'}</span>{lead.referralBy && <span className="block text-xs font-semibold text-blue-700">Referral By: {lead.referralBy}</span>}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{lead.gender}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{lead.age}</td>
                           <td className="px-4 py-3 text-sm text-slate-700"><span className="font-medium">{lead.submittedByName}</span><span className="block text-xs capitalize text-slate-400">{lead.submittedByRole}</span></td>

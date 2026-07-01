@@ -2035,6 +2035,14 @@ export const AdminDashboard = () => {
                         </dd>
                       </div>
                     )}
+                    {activeLead.referralBy && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-gray-500">Referral By (Doctor)</dt>
+                        <dd className="text-gray-900 font-semibold text-blue-700">
+                          {activeLead.referralBy}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
 

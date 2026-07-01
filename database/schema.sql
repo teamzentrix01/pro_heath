@@ -226,3 +226,5 @@ CREATE INDEX IF NOT EXISTS idx_payment_history_submission ON submission_payment_
 
 ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS disease TEXT;
 ALTER TABLE form_submissions ALTER COLUMN disease TYPE TEXT;
+
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS referral_by VARCHAR(150);

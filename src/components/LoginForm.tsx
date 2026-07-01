@@ -92,7 +92,7 @@ export const LoginForm = () => {
           )}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email / ID
+              Email / Mobile Number
             </label>
             <input
               ref={emailInputRef}
@@ -107,7 +107,7 @@ export const LoginForm = () => {
               data-lpignore="true"
               data-1p-ignore="true"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              placeholder="Enter email or ID"
+              placeholder="Enter email or 10-digit mobile number"
             />
           </div>
 

@@ -46,6 +46,7 @@ type SubmissionRow = {
   }> | null;
   submitted_at: Date;
   documents: UploadedDocument[] | null;
+  referral_by: string | null;
 };
 
 const mapSubmission = (row: SubmissionRow): UserSubmission => ({
@@ -78,18 +79,20 @@ const mapSubmission = (row: SubmissionRow): UserSubmission => ({
   statusHistory: row.status_history ?? [],
   documents: row.documents ?? [],
   submittedAt: row.submitted_at.toISOString(),
+  referralBy: row.referral_by ?? null,
 });
 
 export const createSubmission = async (submission: {
   userId: string;
   fullName: string;
-  fatherName: string;
+  fatherName?: string | null;
   gender: string;
   age: number;
-  contactNumber: string | null;
-  address: string;
-  currentLocation: string;
-  disease: string;
+  contactNumber?: string | null;
+  address?: string | null;
+  currentLocation?: string | null;
+  disease?: string | null;
+  referralBy?: string | null;
   documents: UploadedDocument[];
 }) => {
   const client = await getDbClient();
@@ -98,8 +101,8 @@ export const createSubmission = async (submission: {
     await client.query('BEGIN');
 
     const submissionResult = await client.query<SubmissionRow>(
-      `INSERT INTO form_submissions (user_id, full_name, father_name, gender, age, contact_number, address, current_location, disease, reference)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '')
+      `INSERT INTO form_submissions (user_id, full_name, father_name, gender, age, contact_number, address, current_location, disease, referral_by, reference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '')
        RETURNING
          id,
          user_id,
@@ -116,6 +119,7 @@ export const createSubmission = async (submission: {
          address,
          current_location,
          disease,
+         referral_by,
          treatment_status,
          referral_amount,
          payment_method,
@@ -133,13 +137,14 @@ export const createSubmission = async (submission: {
       [
         submission.userId,
         submission.fullName,
-        submission.fatherName,
+        submission.fatherName ?? null,
         submission.gender,
         submission.age,
-        submission.contactNumber,
-        submission.address,
-        submission.currentLocation,
-        submission.disease,
+        submission.contactNumber ?? null,
+        submission.address ?? null,
+        submission.currentLocation ?? null,
+        submission.disease ?? null,
+        submission.referralBy ?? null,
       ]
     );
 
@@ -189,6 +194,7 @@ export const getSubmissionById = async (id: string) => {
        fs.address,
        fs.current_location,
        fs.disease,
+       fs.referral_by,
        fs.treatment_status,
        fs.referral_amount,
        fs.payment_method,
@@ -257,6 +263,7 @@ export const listSubmissions = async (filters: {
       OR LOWER(COALESCE(fs.address, '')) LIKE $${values.length}
       OR LOWER(COALESCE(fs.current_location, '')) LIKE $${values.length}
       OR LOWER(COALESCE(fs.disease, '')) LIKE $${values.length}
+      OR LOWER(COALESCE(fs.referral_by, '')) LIKE $${values.length}
       OR LOWER(fs.status) LIKE $${values.length}
       OR LOWER(COALESCE(au.email, '')) LIKE $${values.length}
       OR LOWER(COALESCE(au.full_name, '')) LIKE $${values.length}
@@ -295,6 +302,7 @@ export const listSubmissions = async (filters: {
        fs.address,
        fs.current_location,
        fs.disease,
+       fs.referral_by,
        fs.treatment_status,
        fs.referral_amount,
        fs.payment_method,
@@ -553,6 +561,7 @@ export const listSubmissionsByUserId = async (userId: string, role: 'pro' | 'doc
        fs.address,
        fs.current_location,
        fs.disease,
+       fs.referral_by,
        fs.treatment_status,
        fs.referral_amount,
        fs.payment_method,
